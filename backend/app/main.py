@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import asyncio
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -7,10 +8,11 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import agents, service
-from .config import BASE_DIR, LLM_BASE_URL, LLM_MODEL
+from .config import BASE_DIR, LLM_BASE_URL, LLM_MODEL, SEMANTIC_BRIDGE_ENABLED
 from .db import get_conn, init_db, loads
 from .mapdata import load_map
 from .parser import parse_task
+from .semantic_bridge import router as semantic_router, run_runtime, stop_runtime
 from .schemas import (
     AcceptTaskRequest,
     ActionRequest,
@@ -33,10 +35,16 @@ SEED_TEXTS = [
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    yield
+    runtime = asyncio.create_task(run_runtime()) if SEMANTIC_BRIDGE_ENABLED else None
+    try:
+        yield
+    finally:
+        if runtime:
+            await stop_runtime(runtime)
 
 
 app = FastAPI(title="CampusPilot API", version="1.0.0", lifespan=lifespan)
+app.include_router(semantic_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173"],
@@ -73,6 +81,7 @@ def health() -> dict[str, Any]:
         "llm_configured": bool(LLM_BASE_URL and LLM_MODEL),
         "llm_model": LLM_MODEL or None,
         "data_notice": mapdata.data_notice,
+        "semantic_bridge_enabled": SEMANTIC_BRIDGE_ENABLED,
     }
 
 
@@ -148,7 +157,7 @@ def actions(task_id: str, payload: ActionRequest) -> dict[str, Any]:
 
 @app.post("/api/tasks/{task_id}/replan")
 def replan(task_id: str, payload: ReplanRequest) -> dict[str, Any]:
-    return service.replan(task_id, payload.reason)
+    return service.replan(task_id, payload.reason, payload.request_id, payload.plan_version)
 
 
 @app.post("/api/tasks/{task_id}/sim/tick")

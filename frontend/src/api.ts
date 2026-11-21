@@ -6,6 +6,7 @@ import type {
   Report,
   StopDraft,
   TaskSummary,
+  SemanticEvent,
 } from './types'
 
 export class ApiError extends Error {
@@ -43,7 +44,7 @@ export function newRequestId(): string {
 }
 
 export const api = {
-  health: () => request<{ status: string; map_version: string; llm_configured: boolean; llm_model: string | null; data_notice: string }>('/api/health'),
+  health: () => request<{ status: string; map_version: string; llm_configured: boolean; llm_model: string | null; data_notice: string; semantic_bridge_enabled: boolean }>('/api/health'),
   map: () => request<CampusMap>('/api/map'),
   parse: (text: string) =>
     request<ParseResult>('/api/tasks/parse', { method: 'POST', body: JSON.stringify({ text }) }),
@@ -71,6 +72,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ seconds, speed_mps: speedMps ?? null }),
     }),
+  setRuntime: (id: string, enabled: boolean, speedMps: number) =>
+    request<Bundle>(`/api/tasks/${id}/sim/runtime`, { method: 'POST', body: JSON.stringify({ enabled, speed_mps: speedMps }) }),
+  semanticEvent: (payload: SemanticEvent) =>
+    request<{ accepted: boolean; duplicate: boolean; decision: { action: string; reason: string }; bundle: Bundle }>(
+      '/api/semantic-events', { method: 'POST', body: JSON.stringify(payload) },
+    ),
   report: (id: string) => request<Report>(`/api/tasks/${id}/report`),
   roadEvents: () => request<{ road_events: Bundle['road_events']; road_status: Record<string, string> }>('/api/road-events'),
   createRoadEvent: (payload: { edge_id: string; status: string; source: string; confirmed_by: string; note: string }) =>

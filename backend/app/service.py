@@ -1,15 +1,37 @@
 import uuid
+from functools import wraps
 from datetime import datetime, timezone
 from time import perf_counter
 from typing import Any
 
 from . import agents
-from .config import SIM_SPEED_MPS
-from .db import dumps, get_conn, loads, now_iso
+from .config import SEMANTIC_BRIDGE_ENABLED, SIM_SPEED_MPS
+from .db import dumps, get_conn, loads, now_iso, operation_lock
 from .mapdata import load_map, node_name
-from .planner import build_plan
+from .planner import build_plan, plan_from_position
 from .report import build_report
-from .simulator import advance
+from .simulator import advance, obstacle_ahead
+
+
+def serialized(function):
+    """Serialize state changes and make nested service operations atomic."""
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        with operation_lock, get_conn() as conn:
+            if not conn.in_transaction:
+                conn.execute("BEGIN IMMEDIATE")
+            return function(*args, **kwargs)
+    return wrapped
+
+
+def consistent_snapshot(function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        with operation_lock, get_conn() as conn:
+            if not conn.in_transaction:
+                conn.execute("BEGIN")
+            return function(*args, **kwargs)
+    return wrapped
 
 
 class ApiError(Exception):
@@ -67,16 +89,65 @@ def add_event(conn, task_id: str, event_type: str, payload: dict[str, Any] | Non
     )
 
 
-def get_road_status(conn) -> dict[str, str]:
+def active_obstacles(conn, task_id: str) -> list[dict[str, Any]]:
+    if not SEMANTIC_BRIDGE_ENABLED:
+        return []
+    return [loads(row["payload"], {}) for row in conn.execute(
+        "SELECT payload FROM semantic_obstacles WHERE task_id = ? AND active = 1", (task_id,)
+    ).fetchall()]
+
+
+def runtime_public(conn, task_id: str) -> dict[str, Any]:
+    row = conn.execute("SELECT * FROM sim_runtime WHERE task_id = ?", (task_id,)).fetchone()
+    if not row:
+        return {"enabled": False, "speed_mps": SIM_SPEED_MPS, "hold_reason": "", "auto_resume": False, "waiting": None}
+    return {**dict(row), "enabled": bool(row["enabled"]) and SEMANTIC_BRIDGE_ENABLED, "auto_resume": bool(row["auto_resume"])}
+
+
+def route_hazards(conn, task_id: str) -> list[dict[str, Any]]:
+    state = _state_row(conn, task_id)
+    if not state:
+        return []
+    remaining = loads(state["remaining_edge_ids"], [])
+    current = state.get("current_edge_id")
+    if current and (not remaining or remaining[0] != current):
+        remaining.insert(0, current)
+    result = []
+    mapdata = load_map()
+    for obstacle in active_obstacles(conn, task_id):
+        edge_id = obstacle["edge_id"]
+        if edge_id not in remaining:
+            continue
+        if edge_id == current and edge_id not in remaining[1:] and not obstacle_ahead(
+            obstacle, mapdata.edges[edge_id], state["last_node_id"], state["edge_progress"]
+        ):
+            continue
+        result.append(obstacle)
+    baseline = get_road_status(conn)
+    for edge_id in set(remaining):
+        status = baseline.get(edge_id, mapdata.edges[edge_id].get("base_status", "open"))
+        if status != "open":
+            result.append({"obstacle_id": f"manual:{edge_id}", "edge_id": edge_id, "edge_fraction": None,
+                           "effective_status": status, "category": "other", "expected_duration_s": None})
+    return result
+
+
+def get_road_status(conn, task_id: str | None = None) -> dict[str, str]:
     rows = conn.execute("SELECT edge_id, status, expires_at, created_at FROM road_events ORDER BY created_at, rowid").fetchall()
     now = now_iso()
     status: dict[str, str] = {}
     for row in rows:
         if row["expires_at"] and row["expires_at"] < now:
-            duration = 0
-            status.pop(row["edge_id"], None)
             continue
         status[row["edge_id"]] = row["status"]
+    if task_id:
+        rank = {"open": 0, "congested": 1, "blocked": 2}
+        for obstacle in active_obstacles(conn, task_id):
+            value = "blocked" if obstacle["effective_status"] == "unknown" else obstacle["effective_status"]
+            edge_id = obstacle["edge_id"]
+            base = load_map().edges[edge_id].get("base_status", "open")
+            if value in rank and rank[value] > rank[status.get(edge_id, base)]:
+                status[edge_id] = value
     return status
 
 
@@ -89,6 +160,7 @@ def _refresh_road_snapshot(conn) -> dict[str, str]:
     return get_road_status(conn)
 
 
+@serialized
 def create_road_event(payload: dict[str, Any]) -> dict[str, Any]:
     mapdata = load_map()
     if payload["edge_id"] not in mapdata.edges:
@@ -160,6 +232,7 @@ def list_tasks(mode: str | None = None) -> list[dict[str, Any]]:
         return result
 
 
+@serialized
 def accept_task(task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     assignee = str(payload.get("assignee") or "").strip()
     if not assignee:
@@ -189,6 +262,7 @@ def accept_task(task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     return get_bundle(task_id)
 
 
+@serialized
 def add_task_note(task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     content = str(payload.get("content") or "").strip()
     if not content:
@@ -213,6 +287,7 @@ def add_task_note(task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     return get_bundle(task_id)
 
 
+@serialized
 def create_task(payload: dict[str, Any]) -> dict[str, Any]:
     started = perf_counter()
     mapdata = load_map()
@@ -311,6 +386,7 @@ def _valid_clock(value: str) -> bool:
     return 0 <= hour <= 23 and 0 <= minute <= 59
 
 
+@consistent_snapshot
 def get_bundle(task_id: str) -> dict[str, Any]:
     mapdata = load_map()
     with get_conn() as conn:
@@ -318,7 +394,7 @@ def get_bundle(task_id: str) -> dict[str, Any]:
         stops = _stop_rows(conn, task_id)
         plans = _plan_rows(conn, task_id)
         state = _state_row(conn, task_id)
-        road_status = get_road_status(conn)
+        road_status = get_road_status(conn, task_id)
         assignment = conn.execute("SELECT * FROM task_assignments WHERE task_id = ?", (task_id,)).fetchone()
         notes = conn.execute("SELECT * FROM task_notes WHERE task_id = ? ORDER BY rowid", (task_id,)).fetchall()
         bundle = {
@@ -334,6 +410,8 @@ def get_bundle(task_id: str) -> dict[str, Any]:
             "assignment": dict(assignment) if assignment else None,
             "notes": [dict(row) for row in notes],
             "map_version": mapdata.map_version,
+            "runtime": runtime_public(conn, task_id),
+            "semantic_obstacles": active_obstacles(conn, task_id),
         }
         return bundle
 
@@ -382,7 +460,7 @@ def _plan_public(plan: dict[str, Any]) -> dict[str, Any]:
         "assumptions": loads(plan["assumptions"], []),
         "unreachable_stops": loads(plan["unreachable_stops"], []),
         "warnings": loads(plan["warnings"], []),
-        "feasible": not loads(plan["unreachable_stops"], []),
+        "feasible": bool(loads(plan["ordered_stops"], [])) and not loads(plan["unreachable_stops"], []),
     }
 
 
@@ -397,6 +475,7 @@ def _state_public(state: dict[str, Any] | None) -> dict[str, Any] | None:
         "last_node_id": state["last_node_id"],
         "position": {"x": state["position_x"], "y": state["position_y"]},
         "updated_at": state["updated_at"],
+        "remaining_edge_ids": loads(state["remaining_edge_ids"], []),
     }
 
 
@@ -417,6 +496,7 @@ def _start_datetime(value: str | None) -> datetime:
         return datetime.now(timezone.utc)
 
 
+@serialized
 def generate_plan(task_id: str, start_time: str | None = None) -> dict[str, Any]:
     started = perf_counter()
     mapdata = load_map()
@@ -424,8 +504,11 @@ def generate_plan(task_id: str, start_time: str | None = None) -> dict[str, Any]
         task = _task_row(conn, task_id)
         if task["status"] in ("completed", "cancelled"):
             raise ApiError(409, "task_closed", "已结束的任务不能重新生成计划")
+        state = _state_row(conn, task_id)
+        if state and float(state["edge_progress"]) > 1e-6:
+            raise ApiError(409, "use_replan", "车辆已在路段中行驶，请使用剩余任务重规划以保留当前位置")
         stops = _stop_rows(conn, task_id)
-        road_status = get_road_status(conn)
+        road_status = get_road_status(conn, task_id)
         active = [s for s in stops if s["status"] != "delivered"]
         result = build_plan(mapdata, task, active, road_status, _start_datetime(start_time), task["pickup_location_id"])
         version = int(task["plan_version"]) + 1
@@ -488,6 +571,7 @@ def _reset_execution(conn, task_id: str, start_node: str, edge_ids: list[str]) -
     )
 
 
+@serialized
 def perform_action(task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     started = perf_counter()
     action = payload["action"]
@@ -495,26 +579,37 @@ def perform_action(task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     with get_conn() as conn:
         logged = conn.execute("SELECT response FROM action_log WHERE request_id = ?", (request_id,)).fetchone()
         if logged:
-            return loads(logged["response"], {})
+            response = loads(logged["response"], {})
+            if response.get("task", {}).get("id") != task_id:
+                raise ApiError(409, "request_id_conflict", "该请求编号属于其他任务")
+            return response
         task = _task_row(conn, task_id)
         _check_plan_version(task, payload.get("plan_version", 0))
         stops = _stop_rows(conn, task_id)
+
+        if action in ("pause", "resume", "start", "cancel", "complete"):
+            conn.execute("UPDATE sim_runtime SET auto_resume = 0, hold_reason = '' WHERE task_id = ?", (task_id,))
 
         if action == "start":
             if task["status"] not in ("ready", "paused"):
                 raise ApiError(409, "invalid_transition", f"当前状态 {task['status']} 不能开始配送")
             if int(task["plan_version"]) < 1:
                 raise ApiError(409, "no_plan", "请先生成配送计划")
+            if not _plan_public(_plan_rows(conn, task_id)[0])["feasible"]:
+                raise ApiError(409, "no_feasible_plan", "当前没有完整可执行路线，请先处理不可达站点")
             _set_status(conn, task_id, "in_progress")
             add_event(conn, task_id, "action:start", {}, task["plan_version"])
         elif action == "pause":
-            if task["status"] != "in_progress":
+            if task["status"] not in ("in_progress", "paused"):
                 raise ApiError(409, "invalid_transition", "只有执行中的任务可以暂停")
             _set_status(conn, task_id, "paused")
             add_event(conn, task_id, "action:pause", {}, task["plan_version"])
         elif action == "resume":
             if task["status"] not in ("paused", "blocked"):
                 raise ApiError(409, "invalid_transition", "只有暂停或阻塞状态可以继续")
+            plans = _plan_rows(conn, task_id)
+            if not plans or not _plan_public(plans[0])["feasible"]:
+                raise ApiError(409, "no_feasible_plan", "当前没有完整可执行路线，请先重规划")
             _set_status(conn, task_id, "in_progress")
             add_event(conn, task_id, "action:resume", {}, task["plan_version"])
         elif action == "arrive":
@@ -596,11 +691,32 @@ def _set_status(conn, task_id: str, status: str) -> None:
     conn.execute("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?", (status, now_iso(), task_id))
 
 
-def replan(task_id: str, reason: str = "") -> dict[str, Any]:
+@serialized
+def apply_dispatch_status(task_id: str, status: str) -> None:
+    """Limited execution tool for dispatch; never confirms pickup or delivery."""
+    with get_conn() as conn:
+        task = _task_row(conn, task_id)
+        if status not in ("paused", "in_progress") or task["status"] not in ("in_progress", "paused", "blocked"):
+            raise ApiError(409, "invalid_dispatch_transition", "调度不能执行该任务状态变更")
+        plans = _plan_rows(conn, task_id)
+        if status == "in_progress" and (not plans or not _plan_public(plans[0])["feasible"]):
+            raise ApiError(409, "no_feasible_plan", "尚无可执行路线，不能自动继续")
+        _set_status(conn, task_id, status)
+
+
+@serialized
+def replan(task_id: str, reason: str = "", request_id: str | None = None, plan_version: int = 0) -> dict[str, Any]:
     started = perf_counter()
     mapdata = load_map()
     with get_conn() as conn:
+        if request_id:
+            logged = conn.execute("SELECT task_id, response FROM action_log WHERE request_id = ?", (request_id,)).fetchone()
+            if logged:
+                if logged["task_id"] != task_id:
+                    raise ApiError(409, "request_id_conflict", "该请求编号属于其他任务")
+                return loads(logged["response"], {})
         task = _task_row(conn, task_id)
+        _check_plan_version(task, plan_version)
         if task["status"] in ("completed", "cancelled"):
             raise ApiError(409, "task_closed", "已结束的任务不能重规划")
         stops = _stop_rows(conn, task_id)
@@ -609,8 +725,11 @@ def replan(task_id: str, reason: str = "") -> dict[str, Any]:
         active = [s for s in stops if s["status"] != "delivered"]
         if not active:
             raise ApiError(409, "nothing_to_replan", "没有剩余站点需要重规划")
-        road_status = get_road_status(conn)
-        result = build_plan(mapdata, task, active, road_status, datetime.now(timezone.utc), start_node)
+        road_status = get_road_status(conn, task_id)
+        result, motion_seed = plan_from_position(
+            mapdata, task, active, road_status, _start_datetime(None), state or {},
+            active_obstacles(conn, task_id), get_road_status(conn),
+        )
         version = int(task["plan_version"]) + 1
         conn.execute(
             "INSERT INTO plans (id, task_id, plan_version, ordered_stops, route_node_ids, route_edge_ids, polyline,"
@@ -631,9 +750,17 @@ def replan(task_id: str, reason: str = "") -> dict[str, Any]:
                 now_iso(),
             ),
         )
-        new_status = "paused" if task["status"] == "in_progress" else task["status"]
+        new_status = ("paused" if task["status"] == "in_progress" else task["status"]) if result.feasible else "blocked"
         conn.execute("UPDATE tasks SET plan_version = ?, status = ?, updated_at = ? WHERE id = ?", (version, new_status, now_iso(), task_id))
-        _reset_execution(conn, task_id, start_node, result.route_edge_ids)
+        if state and float(state["edge_progress"]) > 1e-6 and state["current_edge_id"]:
+            seed = motion_seed or state
+            conn.execute(
+                "UPDATE execution_state SET plan_version = ?, current_edge_id = ?, edge_progress = ?, last_node_id = ?,"
+                " remaining_edge_ids = ?, updated_at = ? WHERE task_id = ?",
+                (version, seed["current_edge_id"], seed["edge_progress"], seed["last_node_id"], dumps(result.route_edge_ids), now_iso(), task_id),
+            )
+        else:
+            _reset_execution(conn, task_id, start_node, result.route_edge_ids)
         add_event(
             conn,
             task_id,
@@ -641,6 +768,7 @@ def replan(task_id: str, reason: str = "") -> dict[str, Any]:
             {
                 "reason": reason,
                 "from_node": start_node,
+                "from_position": {"x": state["position_x"], "y": state["position_y"]} if state else None,
                 "kept_delivered": [s["id"] for s in stops if s["status"] == "delivered"],
                 "unreachable": result.unreachable_stops,
             },
@@ -662,6 +790,9 @@ def replan(task_id: str, reason: str = "") -> dict[str, Any]:
         )
     bundle = get_bundle(task_id)
     bundle["replan_diff"] = _replan_diff(bundle)
+    if request_id:
+        with get_conn() as conn:
+            conn.execute("INSERT INTO action_log VALUES (?, ?, ?, ?, ?)", (request_id, task_id, "replan", dumps(bundle), now_iso()))
     return bundle
 
 
@@ -684,10 +815,13 @@ def _replan_diff(bundle: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def sim_tick(task_id: str, seconds: float, speed_mps: float | None = None) -> dict[str, Any]:
+@serialized
+def sim_tick(task_id: str, seconds: float, speed_mps: float | None = None, *, runtime: bool = False) -> dict[str, Any]:
     mapdata = load_map()
     with get_conn() as conn:
         task = _task_row(conn, task_id)
+        if runtime_public(conn, task_id)["enabled"] and not runtime:
+            raise ApiError(409, "runtime_owns_motion", "后台正在推进该车辆，请勿重复调用手动推进")
         if task["mode"] != "sim":
             raise ApiError(409, "real_mode", "真实模式不使用模拟位置执行器")
         if task["status"] != "in_progress":
@@ -707,7 +841,10 @@ def sim_tick(task_id: str, seconds: float, speed_mps: float | None = None) -> di
             "position_y": state["position_y"],
             "_remaining_edges": loads(state["remaining_edge_ids"], []),
         }
-        outcome = advance(mapdata, task, stops, working, seconds, speed_mps or SIM_SPEED_MPS)
+        outcome = advance(
+            mapdata, task, stops, working, seconds, speed_mps or SIM_SPEED_MPS,
+            get_road_status(conn, task_id), active_obstacles(conn, task_id), get_road_status(conn),
+        )
         for stop_id in outcome["arrived_stop_ids"]:
             conn.execute("UPDATE stops SET status = 'arrived', arrived_at = ? WHERE id = ? AND status = 'pending'", (now_iso(), stop_id))
             add_event(conn, task_id, "stop_arrived", {"stop_id": stop_id, "source": "simulator"}, task["plan_version"])
@@ -725,11 +862,13 @@ def sim_tick(task_id: str, seconds: float, speed_mps: float | None = None) -> di
                 task_id,
             ),
         )
+        conn.execute("UPDATE sim_runtime SET waiting = ?, updated_at = ? WHERE task_id = ?", (outcome["waiting"], now_iso(), task_id))
     bundle = get_bundle(task_id)
     bundle["sim"] = {"waiting": outcome["waiting"], "arrived_stop_ids": outcome["arrived_stop_ids"]}
     return bundle
 
 
+@serialized
 def get_report(task_id: str) -> dict[str, Any]:
     mapdata = load_map()
     with get_conn() as conn:
@@ -741,4 +880,7 @@ def get_report(task_id: str) -> dict[str, Any]:
         report = build_report(mapdata, task, stops, plans, road_edges, events)
         report["agent_summary"] = agents.summary(conn, task_id)
         report["agent_traces"] = agents.list_for_task(conn, task_id)
+        report["semantic_events"] = [loads(row["response"], {}) for row in conn.execute(
+            "SELECT response FROM semantic_events WHERE task_id = ? ORDER BY rowid", (task_id,)
+        ).fetchall()]
         return report

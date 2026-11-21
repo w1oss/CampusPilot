@@ -1,5 +1,5 @@
 import { api, ApiError, newRequestId } from '../api.js'
-import type { Bundle, CampusMap } from '../types'
+import type { Bundle, CampusMap, SemanticObstacle } from '../types'
 
 const React = window.React
 const { useState } = React
@@ -10,6 +10,7 @@ interface Props {
   selectedEdgeId: string | null
   autoSim: boolean
   simSpeed: number
+  bridgeEnabled: boolean
   onToggleAuto: (value: boolean) => void
   onSpeedChange: (value: number) => void
   onSelectEdge: (edgeId: string) => void
@@ -43,6 +44,8 @@ const AGENT_ACTION_LABEL: Record<string, string> = {
   replan_task: '重新规划',
   classify_hazard: '分析道路异常',
   export_report: '生成报告',
+  observe_road_semantics: '接收上游语义判断',
+  decide_dispatch: '协调实时异常',
 }
 
 export default function ExecutionPanel({
@@ -51,6 +54,7 @@ export default function ExecutionPanel({
   selectedEdgeId,
   autoSim,
   simSpeed,
+  bridgeEnabled,
   onToggleAuto,
   onSpeedChange,
   onSelectEdge,
@@ -64,6 +68,9 @@ export default function ExecutionPanel({
   const [candidate, setCandidate] = useState<string | null>(null)
   const [candidateNotice, setCandidateNotice] = useState<string | null>(null)
   const [replanNotice, setReplanNotice] = useState<string | null>(null)
+  const [upstreamKind, setUpstreamKind] = useState<'construction' | 'pedestrian' | 'crowd'>('construction')
+  const [obstaclePercent, setObstaclePercent] = useState('70')
+  const [upstreamNotice, setUpstreamNotice] = useState('')
 
   if (!bundle) {
     return (
@@ -82,6 +89,35 @@ export default function ExecutionPanel({
   const deliveredAll = bundle.stops.length > 0 && bundle.stops.every((s) => s.status === 'delivered')
   const activeStop = bundle.stops.find((s) => s.status !== 'delivered')
   const readOnly = task.status === 'completed' || task.status === 'cancelled'
+
+  async function sendUpstream(obstacle?: SemanticObstacle) {
+    const edgeId = obstacle?.edge_id || selectedEdgeId || bundle?.state?.current_edge_id || bundle?.state?.remaining_edge_ids[0]
+    if (!edgeId) { onError('请先在地图上选择一条道路'); return }
+    const percent = obstaclePercent.trim() === '' ? null : Number(obstaclePercent)
+    if (!obstacle && percent !== null && (!Number.isFinite(percent) || percent < 0 || percent > 100)) {
+      onError('障碍位置请填写 0 到 100，留空表示位置尚未确定'); return
+    }
+    setBusy(true)
+    try {
+      const names = { construction: '施工围挡，当前无法通过', pedestrian: '行人横穿，预计短暂占道', crowd: '道路行人密集，通行缓慢' }
+      const result = await api.semanticEvent({
+        event_id: newRequestId(), task_id: task.id,
+        obstacle_id: obstacle?.obstacle_id || `mock_${newRequestId()}`,
+        revision: (obstacle?.revision || 0) + 1, map_version: map.map_version,
+        source: 'mock_vision_llm', observed_at: new Date().toISOString(),
+        lifecycle: obstacle ? 'cleared' : 'observed', edge_id: edgeId,
+        edge_fraction: obstacle ? obstacle.edge_fraction : percent === null ? null : percent / 100,
+        category: obstacle?.category || upstreamKind,
+        passability: obstacle ? 'open' : upstreamKind === 'crowd' ? 'congested' : 'blocked',
+        confidence: 1, expected_duration_s: upstreamKind === 'pedestrian' ? 5 : 1800,
+        summary: obstacle ? '上游复查确认障碍已经解除' : names[upstreamKind],
+      })
+      onRefresh(result.bundle)
+      setUpstreamNotice(result.decision.reason)
+    } catch (err) {
+      onError(err instanceof ApiError ? err.message : '上游消息发送失败')
+    } finally { setBusy(false) }
+  }
 
   async function run(work: () => Promise<Bundle>) {
     setBusy(true)
@@ -261,23 +297,27 @@ export default function ExecutionPanel({
             </button>
           </div>
 
-          {task.mode === 'sim' && task.status === 'in_progress' ? (
+          {task.mode === 'sim' && !readOnly ? (
             <div className="sim-controls">
               <label className="check-field">
                 <input type="checkbox" checked={autoSim} onChange={(event) => onToggleAuto(event.target.checked)} />
-                <span>自动推进模拟位置</span>
+                <span>{bridgeEnabled ? '后端持续跟踪并推进位置' : '自动推进模拟位置'}</span>
               </label>
               <label className="speed-field">
                 <span>演示速度</span>
                 <select className="input input-sm" value={simSpeed} onChange={(event) => onSpeedChange(Number(event.target.value))}>
+                  <option value={5}>5 m/s</option>
                   <option value={15}>15 m/s</option>
                   <option value={40}>40 m/s</option>
                   <option value={80}>80 m/s</option>
                 </select>
               </label>
-              <p className="hint">演示加速只影响动画时间，不改变报告中的估算配送耗时。</p>
-              {bundle.sim?.waiting === 'awaiting_pickup' ? <p className="hint hint-strong">车辆在取货点等待，请先确认取货。</p> : null}
-              {bundle.sim?.waiting === 'awaiting_delivery' ? <p className="hint hint-strong">车辆已到达站点，等待人工确认交付。</p> : null}
+              <p className="hint">{bridgeEnabled ? '开启后，切换页面或关闭浏览器仍持续运行；到站等待人工交付。' : '演示加速只影响模拟行驶，不改变计划中的估算配送耗时。'}</p>
+              {bundle.state ? <p className="hint">当前位置：({bundle.state.position.x}, {bundle.state.position.y}) · 路段 {bundle.state.current_edge_id || '站点'} · 更新于 {new Date(bundle.state.updated_at).toLocaleTimeString()}</p> : null}
+              {(bundle.runtime?.waiting || bundle.sim?.waiting) === 'awaiting_pickup' ? <p className="hint hint-strong">车辆在取货点等待，请先确认取货。</p> : null}
+              {(bundle.runtime?.waiting || bundle.sim?.waiting) === 'awaiting_delivery' ? <p className="hint hint-strong">车辆已到达站点，等待人工确认交付。</p> : null}
+              {bundle.runtime?.hold_reason ? <p className="hint hint-strong">{bundle.runtime.hold_reason}</p> : null}
+              {bridgeEnabled && bundle.runtime?.hold_reason ? <button className="btn btn-ghost btn-sm" onClick={() => action('pause')} disabled={busy}>保持人工暂停</button> : null}
             </div>
           ) : null}
 
@@ -319,6 +359,37 @@ export default function ExecutionPanel({
           </div>
         </>
       )}
+
+      {bridgeEnabled && task.mode === 'sim' && !readOnly && plan ? (
+        <div className="exception-box">
+          <div className="exception-head"><strong>模拟上游语义消息</strong></div>
+          <p className="hint">模拟视觉与大语言模型已经分析完成的结果。行驶途中随时发送，系统立即结合当前位置处理。</p>
+          <label className="field"><span>道路</span>
+            <select className="input input-sm" value={selectedEdgeId || bundle.state?.current_edge_id || ''} onChange={(event) => onSelectEdge(event.target.value)}>
+              <option value="">请选择道路</option>
+              {map.edges.map((edge) => <option key={edge.id} value={edge.id}>{edge.name} · {edge.id}</option>)}
+            </select>
+          </label>
+          <label className="field"><span>上游理解的情况</span>
+            <select className="input input-sm" value={upstreamKind} onChange={(event) => setUpstreamKind(event.target.value as typeof upstreamKind)}>
+              <option value="construction">施工围挡：请求绕行</option>
+              <option value="pedestrian">行人横穿：先等待</option>
+              <option value="crowd">人群拥挤：比较路线成本</option>
+            </select>
+          </label>
+          <label className="field"><span>障碍距道路起点的位置（百分比，留空表示未知）</span>
+            <input className="input input-sm" type="number" min="0" max="100" value={obstaclePercent} onChange={(event) => setObstaclePercent(event.target.value)} />
+          </label>
+          <button className="btn btn-primary btn-block" onClick={() => { void sendUpstream() }} disabled={busy}>发送模拟语义消息</button>
+          {upstreamNotice ? <p className="candidate">调度结果：{upstreamNotice}</p> : null}
+          {(bundle.semantic_obstacles || []).map((obstacle) => (
+            <div className="stop-item" key={obstacle.obstacle_id}>
+              <div className="stop-main"><strong>{obstacle.edge_id}</strong><p className="hint">{obstacle.summary}</p></div>
+              <button className="btn btn-mini" onClick={() => { void sendUpstream(obstacle) }} disabled={busy}>模拟解除</button>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {!readOnly ? (
         <div className="exception-box">
@@ -431,6 +502,8 @@ function eventLabel(type: string): string {
     pickup_confirmed: '确认取货',
     road_event: '道路异常',
     replan: '重新规划',
+    semantic_event: '收到上游语义消息',
+    semantic_decision: '调度 Agent 完成判断',
   }
   return labels[type] || type
 }

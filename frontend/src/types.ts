@@ -144,6 +144,38 @@ export interface ExecutionState {
   last_node_id: string | null
   position: { x: number; y: number }
   updated_at: string
+  remaining_edge_ids: string[]
+}
+
+export interface SemanticEvent {
+  event_id: string
+  task_id: string
+  obstacle_id: string
+  revision: number
+  map_version: string
+  source?: 'mock_vision_llm' | 'vision_llm'
+  observed_at?: string
+  lifecycle: 'observed' | 'cleared'
+  edge_id: string
+  edge_fraction?: number | null
+  category: 'construction' | 'pedestrian' | 'crowd' | 'other'
+  passability: 'open' | 'congested' | 'blocked' | 'unknown'
+  confidence?: number
+  expected_duration_s?: number
+  summary: string
+}
+
+export interface SemanticObstacle extends SemanticEvent {
+  effective_status: string
+  active: boolean
+}
+
+export interface SimRuntime {
+  enabled: boolean
+  speed_mps: number
+  hold_reason: string
+  auto_resume: boolean
+  waiting: string | null
 }
 
 export interface TimelineEntry {
@@ -211,6 +243,8 @@ export interface Bundle {
   map_version: string
   replan_diff?: ReplanDiff
   sim?: { waiting: string | null; arrived_stop_ids: string[] }
+  runtime?: SimRuntime
+  semantic_obstacles?: SemanticObstacle[]
 }
 
 export interface TaskSummary {

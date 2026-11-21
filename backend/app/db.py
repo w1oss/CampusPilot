@@ -1,5 +1,6 @@
 import json
 import sqlite3
+import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Iterator
@@ -125,7 +126,39 @@ CREATE TABLE IF NOT EXISTS task_notes (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_task_notes_task ON task_notes(task_id, created_at);
+
+CREATE TABLE IF NOT EXISTS semantic_events (
+    event_id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    payload TEXT NOT NULL,
+    response TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS semantic_obstacles (
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    obstacle_id TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    observed_at TEXT NOT NULL,
+    active INTEGER NOT NULL,
+    payload TEXT NOT NULL,
+    PRIMARY KEY (task_id, obstacle_id)
+);
+CREATE TABLE IF NOT EXISTS sim_runtime (
+    task_id TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    speed_mps REAL NOT NULL DEFAULT 40,
+    hold_reason TEXT NOT NULL DEFAULT '',
+    auto_resume INTEGER NOT NULL DEFAULT 0,
+    decision_key TEXT NOT NULL DEFAULT '',
+    waiting TEXT,
+    updated_at TEXT NOT NULL
+);
 """
+
+# One authoritative writer per process. Nested services share the outer transaction,
+# so ingestion, agent decisions and plan changes commit (or roll back) together.
+operation_lock = threading.RLock()
+_connections = threading.local()
 
 
 def now_iso() -> str:
@@ -142,7 +175,12 @@ def _connect() -> sqlite3.Connection:
 
 @contextmanager
 def get_conn() -> Iterator[sqlite3.Connection]:
+    existing = getattr(_connections, "connection", None)
+    if existing is not None:
+        yield existing
+        return
     conn = _connect()
+    _connections.connection = conn
     try:
         yield conn
         conn.commit()
@@ -150,6 +188,7 @@ def get_conn() -> Iterator[sqlite3.Connection]:
         conn.rollback()
         raise
     finally:
+        _connections.connection = None
         conn.close()
 
 

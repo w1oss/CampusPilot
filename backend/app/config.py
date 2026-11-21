@@ -37,6 +37,11 @@ CONGESTED_FACTOR = float(os.getenv("CAMPUSPILOT_CONGESTED_FACTOR", "2.0"))
 SIM_SPEED_MPS = float(os.getenv("CAMPUSPILOT_SIM_SPEED_MPS", "40.0"))
 DEFAULT_DWELL_SECONDS = float(os.getenv("CAMPUSPILOT_DWELL_SECONDS", "60"))
 
+# Optional upstream adapter; existing manual workflows work with this disabled.
+SEMANTIC_BRIDGE_ENABLED = os.getenv("CAMPUSPILOT_SEMANTIC_BRIDGE", "1").lower() in ("1", "true", "yes")
+SIM_TICK_INTERVAL = max(0.05, float(os.getenv("CAMPUSPILOT_SIM_TICK_INTERVAL", "0.1")))
+SEMANTIC_MAX_AGE_SECONDS = float(os.getenv("CAMPUSPILOT_SEMANTIC_MAX_AGE", "30"))
+
 LLM_BASE_URL = os.getenv("CAMPUSPILOT_LLM_BASE_URL", "")
 LLM_API_KEY = os.getenv("CAMPUSPILOT_LLM_API_KEY", "")
 LLM_MODEL = os.getenv("CAMPUSPILOT_LLM_MODEL", "")

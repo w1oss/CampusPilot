@@ -1,0 +1,95 @@
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+class StopDraft(BaseModel):
+    location_id: str
+    items: list[str] = Field(default_factory=list)
+    priority: Literal["normal", "urgent"] = "normal"
+
+
+class TaskDraft(BaseModel):
+    mode: Literal["real", "sim"] = "sim"
+    pickup_location_id: str
+    stops: list[StopDraft] = Field(default_factory=list)
+    deadline: str | None = None
+    deadline_kind: Literal["none", "clock"] = "none"
+
+
+class ParseRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    clarification: dict | None = None
+
+
+class ParseResponse(BaseModel):
+    draft: TaskDraft
+    missing_fields: list[str]
+    notes: list[str]
+    parser: str
+    raw_text: str
+
+
+class CreateTaskRequest(BaseModel):
+    mode: Literal["real", "sim"] = "sim"
+    pickup_location_id: str
+    stops: list[StopDraft]
+    deadline: str | None = None
+    deadline_kind: Literal["none", "clock"] = "none"
+    raw_input: str = ""
+    parser: str = "manual"
+    confirmed: bool = True
+
+
+class PlanRequest(BaseModel):
+    start_time: str | None = None
+
+
+class AcceptTaskRequest(BaseModel):
+    assignee: str = Field(min_length=1, max_length=32)
+    note: str = ""
+
+
+class TaskNoteRequest(BaseModel):
+    author: str = Field(default="管理员", max_length=32)
+    content: str = Field(min_length=1, max_length=500)
+
+
+class ActionRequest(BaseModel):
+    action: Literal[
+        "start",
+        "pause",
+        "resume",
+        "arrive",
+        "confirm_pickup",
+        "confirm_delivery",
+        "complete",
+        "cancel",
+    ]
+    request_id: str = Field(min_length=8, max_length=64)
+    plan_version: int = 0
+    stop_id: str | None = None
+    note: str = ""
+
+
+class ReplanRequest(BaseModel):
+    request_id: str = Field(min_length=8, max_length=64)
+    reason: str = ""
+
+
+class RoadEventRequest(BaseModel):
+    edge_id: str
+    status: Literal["open", "congested", "blocked"]
+    source: Literal["user_text", "user_photo", "model_candidate", "admin"] = "user_text"
+    confirmed_by: str = Field(default="user", max_length=64)
+    note: str = ""
+    expires_at: str | None = None
+
+
+class SimTickRequest(BaseModel):
+    seconds: float = Field(default=1.0, gt=0, le=3600)
+    speed_mps: float | None = Field(default=None, gt=0, le=1000)
+
+
+class SeedRequest(BaseModel):
+    reset: bool = False

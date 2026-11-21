@@ -1,0 +1,255 @@
+{
+  "version": 1,
+  "description": "CampusPilot 自然语言任务解析人工标注样例集。每条包含输入文本与人工确认的期望结果。",
+  "cases": [
+    {
+      "id": "case01",
+      "note": "标准三站点：优先站点 + 截止时间",
+      "text": "从教三楼取3份实验材料，分别送到科研楼、教四楼和学一公寓，教四楼优先，16:00前完成。",
+      "expect": {
+        "missing": [],
+        "pickup": "cs_building",
+        "stops": [
+          { "location": "research_building", "priority": "normal" },
+          { "location": "lab_building", "priority": "urgent" },
+          { "location": "xueyi_building", "priority": "normal" }
+        ],
+        "deadline": "16:00",
+        "items_contain": ["实验材料"]
+      }
+    },
+    {
+      "id": "case02",
+      "note": "两站点 + 先送；无截止时间属于正常",
+      "text": "从综合服务楼取2箱饮用水送到图书馆和学一公寓，图书馆先送。",
+      "expect": {
+        "missing": [],
+        "pickup": "logistics_center",
+        "stops": [
+          { "location": "library", "priority": "urgent" },
+          { "location": "xueyi_building", "priority": "normal" }
+        ],
+        "deadline": null
+      }
+    },
+    {
+      "id": "case03",
+      "note": "单站点、无截止时间",
+      "text": "从教三楼取5份会议资料送到科研楼。",
+      "expect": {
+        "missing": [],
+        "pickup": "cs_building",
+        "stops": [{ "location": "research_building", "priority": "normal" }],
+        "deadline": null,
+        "items_contain": ["会议资料"]
+      }
+    },
+    {
+      "id": "case04",
+      "note": "缺取货点：应提示补充，或从“把实验室的材料送到”中正确识别取货点",
+      "text": "把实验室的材料送到科研楼。",
+      "expect": {
+        "either": [
+          { "missing": ["pickup_location"] },
+          {
+            "pickup": "lab_building",
+            "stops": [{ "location": "research_building", "priority": "normal" }]
+          }
+        ]
+      }
+    },
+    {
+      "id": "case05",
+      "note": "缺物品：应提示补充物品名称",
+      "text": "从教三楼取，送到科研楼和图书馆，16:00前。",
+      "expect": {
+        "missing_any": ["items", "item_allocation"],
+        "pickup": "cs_building",
+        "stops": [
+          { "location": "research_building", "priority": "normal" },
+          { "location": "library", "priority": "normal" }
+        ],
+        "deadline": "16:00"
+      }
+    },
+    {
+      "id": "case06",
+      "note": "未知取货地点：应提示地点不在白名单，取货点应为空",
+      "text": "从火星基地取文件送到图书馆。",
+      "expect": {
+        "missing": ["unknown_location:火星基地"],
+        "pickup": ""
+      }
+    },
+    {
+      "id": "case07",
+      "note": "未知配送地点：应提示该地点不在白名单",
+      "text": "从教三楼取文件送到科研楼和体育馆。",
+      "expect": {
+        "missing": ["unknown_location:体育馆"]
+      }
+    },
+    {
+      "id": "case08",
+      "note": "中文时间：下午四点半",
+      "text": "从图书馆取5本书送到学一公寓，最晚下午4点半。",
+      "expect": {
+        "missing": [],
+        "pickup": "library",
+        "stops": [{ "location": "xueyi_building", "priority": "normal" }],
+        "deadline": "16:30"
+      }
+    },
+    {
+      "id": "case09",
+      "note": "中文时间：下午五点",
+      "text": "从综合服务楼取2箱水送到图书馆，最晚下午5点。",
+      "expect": {
+        "missing": [],
+        "pickup": "logistics_center",
+        "stops": [{ "location": "library", "priority": "normal" }],
+        "deadline": "17:00"
+      }
+    },
+    {
+      "id": "case10",
+      "note": "冒号时间：17:30",
+      "text": "从教三楼取3份材料送到科研楼，17:30前完成。",
+      "expect": {
+        "missing": [],
+        "pickup": "cs_building",
+        "stops": [{ "location": "research_building", "priority": "normal" }],
+        "deadline": "17:30"
+      }
+    },
+    {
+      "id": "case11",
+      "note": "顺序优先：先送教三楼",
+      "text": "从教四楼取2台设备送到教三楼、科研楼，教三楼先送。",
+      "expect": {
+        "missing": [],
+        "pickup": "lab_building",
+        "stops": [
+          { "location": "cs_building", "priority": "urgent" },
+          { "location": "research_building", "priority": "normal" }
+        ],
+        "deadline": null
+      }
+    },
+    {
+      "id": "case12",
+      "note": "顺序优先：优先处理放在地点前",
+      "text": "从教四楼取2台设备送到教三楼、科研楼，优先处理科研楼。",
+      "expect": {
+        "missing": [],
+        "pickup": "lab_building",
+        "stops": [
+          { "location": "cs_building", "priority": "normal" },
+          { "location": "research_building", "priority": "urgent" }
+        ],
+        "deadline": null
+      }
+    },
+    {
+      "id": "case13",
+      "note": "别名识别：计算机学院、图书楼、学1楼",
+      "text": "从计算机学院取资料送到图书楼和学1楼。",
+      "expect": {
+        "missing": [],
+        "pickup": "cs_building",
+        "stops": [
+          { "location": "library", "priority": "normal" },
+          { "location": "xueyi_building", "priority": "normal" }
+        ],
+        "deadline": null
+      }
+    },
+    {
+      "id": "case14",
+      "note": "别名识别：后勤服务中心",
+      "text": "从后勤服务中心取2箱饮用水送到图书馆和学一公寓，图书馆优先。",
+      "expect": {
+        "missing": [],
+        "pickup": "logistics_center",
+        "stops": [
+          { "location": "library", "priority": "urgent" },
+          { "location": "xueyi_building", "priority": "normal" }
+        ],
+        "deadline": null
+      }
+    },
+    {
+      "id": "case15",
+      "note": "多物品：水和盒饭",
+      "text": "从综合服务楼取1箱水和2份盒饭送到学一公寓和图书馆。",
+      "expect": {
+        "missing": [],
+        "pickup": "logistics_center",
+        "stops": [
+          { "location": "xueyi_building", "priority": "normal" },
+          { "location": "library", "priority": "normal" }
+        ],
+        "deadline": null,
+        "items_contain": ["水", "盒饭"]
+      }
+    },
+    {
+      "id": "case16",
+      "note": "模糊时间词：明天下午但无具体时间；不应误判截止时间",
+      "text": "明天下午从教三楼取3份实验材料送到科研楼和教四楼，教四楼优先，不用着急。",
+      "expect": {
+        "missing": [],
+        "pickup": "cs_building",
+        "stops": [
+          { "location": "research_building", "priority": "normal" },
+          { "location": "lab_building", "priority": "urgent" }
+        ],
+        "deadline": null
+      }
+    },
+    {
+      "id": "case17",
+      "note": "缺配送站点：只有取货点",
+      "text": "从教三楼取3份材料，尽快送到。",
+      "expect": {
+        "missing": ["delivery_stops"],
+        "pickup": "cs_building",
+        "stops": []
+      }
+    },
+    {
+      "id": "case18",
+      "note": "完全缺信息：无地点、无站点",
+      "text": "帮我送点东西。",
+      "expect": {
+        "missing": ["pickup_location", "delivery_stops"],
+        "pickup": ""
+      }
+    },
+    {
+      "id": "case19",
+      "note": "优先 + 截止时间组合",
+      "text": "从图书馆取2份文件送到教三楼和学一公寓，学一公寓优先，15:00前完成。",
+      "expect": {
+        "missing": [],
+        "pickup": "library",
+        "stops": [
+          { "location": "cs_building", "priority": "normal" },
+          { "location": "xueyi_building", "priority": "urgent" }
+        ],
+        "deadline": "15:00"
+      }
+    },
+    {
+      "id": "case20",
+      "note": "加急词识别",
+      "text": "从教三楼取3份材料送到教四楼，教四楼加急。",
+      "expect": {
+        "missing": [],
+        "pickup": "cs_building",
+        "stops": [{ "location": "lab_building", "priority": "urgent" }],
+        "deadline": null
+      }
+    }
+  ]
+}

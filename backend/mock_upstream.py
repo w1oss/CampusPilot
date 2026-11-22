@@ -13,6 +13,49 @@ import uuid
 from datetime import datetime, timezone
 
 
+def choose_demo_route(mapdata):
+    """Choose reachable locations from the live map without changing road state."""
+    locations = [n["id"] for n in mapdata["nodes"] if n.get("kind") == "location"]
+    adjacency = {n["id"]: [] for n in mapdata["nodes"]}
+    for edge in mapdata["edges"]:
+        if mapdata.get("road_status", {}).get(edge["id"], edge.get("base_status", "open")) == "blocked":
+            continue
+        adjacency[edge["from"]].append(edge["to"])
+        if edge.get("bidirectional", True):
+            adjacency[edge["to"]].append(edge["from"])
+    candidates = [("cs_building", "library")]
+    candidates += [(source, "library") for source in locations if source != "library"]
+    candidates += [(source, target) for source in locations for target in locations if source != target]
+    for source, target in candidates:
+        if source not in locations or target not in locations:
+            continue
+        visited, pending = {source}, [source]
+        while pending:
+            for neighbor in adjacency[pending.pop()]:
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    pending.append(neighbor)
+        if target in visited:
+            return source, target
+    raise ValueError("当前路况下没有两个可连通的演示地点，请先在页面检查封闭道路；未创建演示任务，也未修改路况。")
+
+
+def create_demo_task(request, mapdata):
+    source, target = choose_demo_route(mapdata)
+    names = {node["id"]: node["name"] for node in mapdata["nodes"]}
+    print(f"按当前路况选择演示路线：{names[source]} → {names[target]}", flush=True)
+    created = request("/api/tasks", {"mode": "sim", "pickup_location_id": source,
+        "stops": [{"location_id": target, "items": ["模拟文件"], "priority": "normal"}], "confirmed": True})
+    task_id = created["task"]["id"]
+    planned = request(f"/api/tasks/{task_id}/plan", {})
+    if not planned.get("plan", {}).get("feasible"):
+        raise ValueError(f"规划时路况发生变化，演示任务 {task_id} 暂未启动。请在页面查看不可达原因后重试；未修改路况。")
+    for action in ("start", "confirm_pickup"):
+        request(f"/api/tasks/{task_id}/actions", {"action": action, "request_id": uuid.uuid4().hex})
+    request(f"/api/tasks/{task_id}/sim/runtime", {"enabled": True, "speed_mps": 5})
+    return task_id
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="行驶途中模拟视觉与大模型汇总后的语义消息")
     parser.add_argument("--url", default="http://127.0.0.1:8000")
@@ -39,13 +82,7 @@ def main() -> None:
     mapdata = request("/api/map")
     task_id = args.task_id
     if args.demo:
-        created = request("/api/tasks", {"mode": "sim", "pickup_location_id": "cs_building",
-            "stops": [{"location_id": "library", "items": ["模拟文件"], "priority": "normal"}], "confirmed": True})
-        task_id = created["task"]["id"]
-        request(f"/api/tasks/{task_id}/plan", {})
-        for action in ("start", "confirm_pickup"):
-            request(f"/api/tasks/{task_id}/actions", {"action": action, "request_id": uuid.uuid4().hex})
-        request(f"/api/tasks/{task_id}/sim/runtime", {"enabled": True, "speed_mps": 5})
+        task_id = create_demo_task(request, mapdata)
     print(f"task_id={task_id}; {args.delay} 秒后发送，不等待标记点", flush=True)
     time.sleep(args.delay)
     snapshot = request(f"/api/tasks/{task_id}")

@@ -1,6 +1,10 @@
 import sys
+import os
 from pathlib import Path
 
+# This script resets its database. Never point it at the application's live DB,
+# even if the caller's environment already defines CAMPUSPILOT_DB.
+os.environ["CAMPUSPILOT_DB"] = str(Path(__file__).resolve().parent.parent / "var" / "test_smoke.db")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import service

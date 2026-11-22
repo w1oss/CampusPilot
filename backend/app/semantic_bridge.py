@@ -15,7 +15,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from . import agents, service
+from . import agents, scene_sim, service
 from .config import (
     SEMANTIC_BRIDGE_ENABLED,
     SEMANTIC_MAX_AGE_SECONDS,
@@ -226,6 +226,16 @@ def ingest(payload: dict[str, Any]) -> dict[str, Any]:
                 " revision = excluded.revision, observed_at = excluded.observed_at, active = excluded.active, payload = excluded.payload",
                 (task_id, payload["obstacle_id"], payload["revision"], observation["observed_at"], int(observation["active"]), dumps(observation)),
             )
+            scene_id = service.task_scene(conn, task_id)
+            cleared = observation.get("lifecycle") == "cleared" or observation.get("effective_status") == "open"
+            existing = conn.execute(
+                "SELECT source FROM road_known WHERE scene_id = ? AND obstacle_id = ?",
+                (scene_id, payload["obstacle_id"]),
+            ).fetchone()
+            if cleared and existing and existing["source"] == "admin":
+                service.mark_known_cleared_by_machine(conn, scene_id, payload["obstacle_id"], observation)
+            else:
+                service.upsert_known(conn, scene_id, observation, source=payload["source"])
         agents.record(conn, "road_observer", "observe_road_semantics", task_id=task_id,
                       input_summary=f"{event_id}：{payload['summary']}",
                       output_summary=f"道路={payload['edge_id']}；通行={observation['effective_status']}；{'已接纳' if accepted else '忽略旧消息或等待复核'}；结构化适配；{'已紧急停车' if stopped else '无需停车'}",
@@ -274,18 +284,14 @@ def set_runtime(task_id: str, enabled: bool, speed_mps: float, auto_upstream: bo
         if not enabled:
             conn.execute("UPDATE sim_runtime SET auto_resume = 0 WHERE task_id = ?", (task_id,))
         previous = service.upstream_public(conn, task_id)
-        # Changing speed or reopening the page must not restart an existing cycle.
+        # Switching scene keeps already-known road conditions; only the generator cursor resets.
         if auto_upstream and (not previous["enabled"] or previous["category"] != upstream_category):
-            if previous["enabled"] and previous["phase"] == 1:
-                raise service.ApiError(409, "upstream_cycle_active", "当前模拟障碍尚未解除，请等待本轮结束后切换场景")
-            pending = conn.execute("SELECT payload, phase FROM upstream_simulations WHERE task_id = ?", (task_id,)).fetchone()
-            if pending and pending["phase"] == 1:
-                # Resume a stopped source without losing its outstanding obstacle.
-                conn.execute("UPDATE upstream_simulations SET enabled = 1 WHERE task_id = ?", (task_id,))
-            else:
-                conn.execute("INSERT INTO upstream_simulations (task_id, enabled, category) VALUES (?, 1, ?)"
-                             " ON CONFLICT(task_id) DO UPDATE SET enabled = 1, category = excluded.category, phase = 0, elapsed = 0, payload = '{}'",
-                             (task_id, upstream_category))
+            conn.execute(
+                "INSERT INTO upstream_simulations (task_id, enabled, category) VALUES (?, 1, ?)"
+                " ON CONFLICT(task_id) DO UPDATE SET enabled = 1, category = excluded.category, phase = 0,"
+                " elapsed = 0, last_edge_id = NULL, next_generate_at = 0, generated_count = 0, payload = '{}'",
+                (task_id, upstream_category),
+            )
         elif not auto_upstream:
             if enabled or previous["configured"]:
                 conn.execute("INSERT OR IGNORE INTO upstream_simulations (task_id, category) VALUES (?, ?)", (task_id, upstream_category))
@@ -412,11 +418,18 @@ def move_runtime(seconds: float) -> None:
                 service.sim_tick(task_id, seconds, runtime["speed_mps"], runtime=True)
 
 
+@service.serialized
+def scene_tick(real_seconds: float) -> list[dict[str, Any]]:
+    """Commit the scene clock, new observations and en-route rechecks in one transaction."""
+    with get_conn() as conn:
+        return scene_sim.step(conn, real_seconds)
+
+
 def step_runtime(seconds: float) -> None:
     """One bounded real-time step: stop first, decide next, move only if released."""
     if not SEMANTIC_BRIDGE_ENABLED:
         return
-    for payload in trigger_upstream(seconds):
+    for payload in scene_tick(seconds):
         try:
             receive(payload)
         except Exception:
@@ -454,3 +467,19 @@ def runtime_control(task_id: str, payload: SimRuntimeRequest) -> dict[str, Any]:
 @router.post("/api/tasks/{task_id}/sim/upstream/clear")
 def upstream_clear(task_id: str) -> dict[str, Any]:
     return clear_upstream(task_id)
+
+@service.serialized
+def reset_scene_state(scene_id: str, include_admin: bool = False) -> dict[str, Any]:
+    with get_conn() as conn:
+        scene_sim.reset_scene(conn, scene_id, include_admin=include_admin)
+        return {"reset": True, "keep_admin": not include_admin, "scene": service.scene_public(conn, scene_id)}
+
+
+@router.post("/api/scenes/{scene_id}/reset")
+def scene_reset(scene_id: str, include_admin: bool = False) -> dict[str, Any]:
+    return reset_scene_state(scene_id, include_admin)
+
+
+@router.post("/api/scenes/{scene_id}/truth/{obstacle_id}/clear")
+def truth_clear(scene_id: str, obstacle_id: str) -> dict[str, Any]:
+    return service.script_clear_truth(scene_id, obstacle_id)

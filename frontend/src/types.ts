@@ -165,9 +165,19 @@ export interface SemanticEvent {
   summary: string
 }
 
-export interface SemanticObstacle extends SemanticEvent {
+export interface SemanticObstacle {
+  obstacle_id: string
+  edge_id: string
+  edge_fraction?: number | null
+  category?: string
   effective_status: string
   active: boolean
+  summary?: string
+  source?: 'mock_vision_llm' | 'vision_llm' | 'admin'
+  authority?: 'normal' | 'hard'
+  position_known?: boolean
+  clear_evidence?: number
+  observed_at?: string
 }
 
 export interface SimRuntime {
@@ -246,7 +256,9 @@ export interface Bundle {
   sim?: { waiting: string | null; arrived_stop_ids: string[] }
   runtime?: SimRuntime
   semantic_obstacles?: SemanticObstacle[]
-  upstream_simulation?: { enabled: boolean; configured: boolean; category: 'pedestrian' | 'construction' | 'crowd'; phase: number; elapsed: number }
+  road_marks?: Record<string, { status: string; sources: string[]; authority: 'normal' | 'hard'; position_known: boolean }>
+  upstream_simulation?: { enabled: boolean; configured: boolean; category: 'pedestrian' | 'construction' | 'crowd' | 'box' | 'barrier'; phase: number; elapsed: number; generated_count?: number; last_edge_id?: string | null }
+  scene?: { id: string; kind: string; virtual_seconds: number }
 }
 
 export interface TaskSummary {

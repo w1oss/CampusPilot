@@ -32,6 +32,7 @@ class ParseResponse(BaseModel):
 
 class CreateTaskRequest(BaseModel):
     mode: Literal["real", "sim"] = "sim"
+    scene_id: str | None = None
     pickup_location_id: str
     stops: list[StopDraft]
     deadline: str | None = None
@@ -80,7 +81,10 @@ class ReplanRequest(BaseModel):
 
 class RoadEventRequest(BaseModel):
     edge_id: str
+    edge_fraction: float | None = Field(default=None, ge=0, le=1)
     status: Literal["open", "congested", "blocked"]
+    scene_id: str = "sim_default"
+    authority: Literal["normal", "hard"] = "normal"
     source: Literal["user_text", "user_photo", "model_candidate", "admin"] = "user_text"
     confirmed_by: str = Field(default="user", max_length=64)
     note: str = ""
@@ -110,7 +114,7 @@ class SemanticEventRequest(BaseModel):
     lifecycle: Literal["observed", "cleared"] = "observed"
     edge_id: str
     edge_fraction: float | None = Field(default=None, ge=0, le=1)
-    category: Literal["construction", "pedestrian", "crowd", "other"] = "other"
+    category: Literal["construction", "pedestrian", "crowd", "box", "barrier", "other"] = "other"
     passability: Literal["open", "congested", "blocked", "unknown"]
     confidence: float = Field(default=1, ge=0, le=1)
     expected_duration_s: float | None = Field(default=None, ge=0, le=86400)
@@ -121,4 +125,4 @@ class SimRuntimeRequest(BaseModel):
     enabled: bool
     speed_mps: float = Field(default=40, gt=0, le=1000)
     auto_upstream: bool = False
-    upstream_category: Literal["pedestrian", "construction", "crowd"] = "pedestrian"
+    upstream_category: Literal["pedestrian", "construction", "crowd", "box", "barrier"] = "pedestrian"

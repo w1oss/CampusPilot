@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import pytest
 
-from app import db, main, semantic_bridge as bridge, service
+from app import db, main, scene_sim, semantic_bridge as bridge, service
 from app.mapdata import MapData
 from app.schemas import SemanticEventRequest
 from app.simulator import advance
@@ -32,7 +32,7 @@ def isolated_world(tmp_path, monkeypatch):
                       "polyline": [[by_id[source]["x"], by_id[source]["y"]], [by_id[target]["x"], by_id[target]["y"]]]})
     mapdata = MapData({"map_id": "test", "map_version": "test-v1", "coordinate_system": {"width": 100, "height": 100},
                        "nodes": nodes, "edges": edges})
-    for module in (service, bridge, main):
+    for module in (service, bridge, main, scene_sim):
         monkeypatch.setattr(module, "load_map", lambda: mapdata)
     monkeypatch.setattr(bridge, "SEMANTIC_BRIDGE_ENABLED", True)
     db.init_db()
@@ -159,10 +159,10 @@ def test_unknown_geometry_and_one_way_keep_pose_and_report_unreachable(isolated_
     assert result["state"]["position"] == {"x": 40, "y": 0}
 
 
-def test_task_scope_and_real_mode_isolation():
+def test_scene_sharing_and_real_mode_isolation():
     first, second, real = driving_task(), driving_task(), driving_task("real")
     bridge.receive(event(first))
-    assert "a" not in service.get_bundle(second)["road_status"]
+    assert service.get_bundle(second)["road_status"]["a"] == "blocked"
     assert "a" not in service.get_bundle(real)["road_status"]
     with pytest.raises(service.ApiError, match="仅作用于指定模拟任务"):
         bridge.receive(event(real))
@@ -299,7 +299,7 @@ def test_automatic_source_observes_and_clears_without_admin_or_browser():
     bridge.step_runtime(3)
     stopped = service.get_bundle(task_id)
     assert stopped["task"]["status"] == "paused"
-    assert stopped["upstream_simulation"]["phase"] == 1
+    assert stopped["upstream_simulation"]["generated_count"] == 1
     assert stopped["semantic_obstacles"][0]["edge_id"] == "a"
     assert stopped["semantic_obstacles"][0]["edge_fraction"] > 0.4
     assert stopped["state"]["position"] == {"x": 40, "y": 0}
@@ -307,7 +307,6 @@ def test_automatic_source_observes_and_clears_without_admin_or_browser():
     cleared = service.get_bundle(task_id)
     assert cleared["task"]["status"] == "in_progress"
     assert cleared["semantic_obstacles"] == []
-    assert cleared["upstream_simulation"]["phase"] == 2
     assert cleared["state"]["position"]["x"] > 40
     with db.get_conn() as conn:
         assert conn.execute("SELECT COUNT(*) FROM semantic_events").fetchone()[0] == 2
@@ -317,19 +316,19 @@ def test_automatic_source_observes_and_clears_without_admin_or_browser():
         assert conn.execute("SELECT COUNT(*) FROM semantic_events").fetchone()[0] == 2
 
 
-def test_source_clear_keeps_manual_pause_and_does_not_lose_pending_obstacle():
+def test_manual_pause_survives_recheck_and_source_restart():
     task_id = driving_task()
     bridge.set_runtime(task_id, True, 10, True)
     bridge.step_runtime(3)
     action(task_id, "pause")
     bridge.set_runtime(task_id, True, 10, False)
     bridge.step_runtime(3)
-    assert service.get_bundle(task_id)["semantic_obstacles"]
+    checked = service.get_bundle(task_id)
+    assert checked["semantic_obstacles"] == []
+    assert checked["task"]["status"] == "paused"
     bridge.set_runtime(task_id, True, 10, True)
     bridge.step_runtime(3)
-    final = service.get_bundle(task_id)
-    assert final["semantic_obstacles"] == []
-    assert final["task"]["status"] == "paused"
+    assert service.get_bundle(task_id)["task"]["status"] == "paused"
 
 
 def test_speed_changes_do_not_rearm_automatic_source():
@@ -368,17 +367,139 @@ def test_source_stops_the_vehicle_immediately_when_enabled():
     assert bundle["state"]["position"] == {"x": 40, "y": 0}
 
 
-def test_construction_stays_active_until_manual_clear():
+def test_construction_truth_ends_but_known_waits_for_recheck():
     task_id = driving_task()
     bridge.set_runtime(task_id, True, 10, True, "construction")
     bridge.step_runtime(3)
+    action(task_id, "pause")
     started = service.get_bundle(task_id)
-    assert started["upstream_simulation"]["phase"] == 1
     assert started["semantic_obstacles"] and started["semantic_obstacles"][0]["active"]
-    bridge.step_runtime(600)
+    assert started["upstream_simulation"]["generated_count"] == 1
+    with db.get_conn() as conn:
+        conn.execute("UPDATE obstacle_truth SET present = 0")
+        conn.execute(
+            "UPDATE execution_state SET position_x = 100, position_y = 100, current_edge_id = 'b',"
+            " last_node_id = 'junction', edge_progress = 0.5 WHERE task_id = ?",
+            (task_id,),
+        )
+    bridge.step_runtime(1)
     held = service.get_bundle(task_id)
-    assert held["upstream_simulation"]["phase"] == 1
     assert held["semantic_obstacles"] and held["semantic_obstacles"][0]["active"]
-    cleared = bridge.clear_upstream(task_id)
-    assert cleared["bundle"]["upstream_simulation"]["phase"] == 2
-    assert cleared["bundle"]["semantic_obstacles"] == []
+    with db.get_conn() as conn:
+        conn.execute(
+            "UPDATE execution_state SET position_x = 40, position_y = 0, current_edge_id = 'a',"
+            " last_node_id = 'pickup', edge_progress = 0.4 WHERE task_id = ?",
+            (task_id,),
+        )
+    bridge.step_runtime(1)
+    cleared = service.get_bundle(task_id)
+    assert cleared["semantic_obstacles"] == []
+
+def test_manual_whole_road_is_not_auto_cleared_by_passing_nearby():
+    task_id = driving_task()
+    service.create_road_event({
+        "edge_id": "a", "status": "blocked", "scene_id": "sim_default",
+        "source": "admin", "authority": "normal", "confirmed_by": "operator", "note": "整段施工",
+    })
+    marks = service.get_bundle(task_id)["road_marks"]
+    assert marks["a"]["sources"] == ["admin"]
+    assert marks["a"]["position_known"] is False
+    bridge.step_runtime(3)
+    bridge.step_runtime(3)
+    kept = service.get_bundle(task_id)
+    assert any(o["obstacle_id"] == "admin:a" for o in kept["semantic_obstacles"])
+
+
+def test_road_marks_keep_manual_and_machine_sources_on_same_edge():
+    task_id = driving_task()
+    service.create_road_event({
+        "edge_id": "a", "status": "blocked", "scene_id": "sim_default",
+        "source": "admin", "authority": "normal", "confirmed_by": "operator", "note": "人工施工",
+    })
+    bridge.receive(event(task_id, obstacle_id="machine-a", edge_fraction=0.7))
+    marks = service.get_bundle(task_id)["road_marks"]["a"]
+    assert set(marks["sources"]) == {"admin", "machine"}
+    assert marks["position_known"] is True
+
+
+def test_hard_block_cannot_be_cleared_by_machine_observation():
+    task_id = driving_task()
+    service.create_road_event({
+        "edge_id": "a", "status": "blocked", "scene_id": "sim_default",
+        "source": "admin", "authority": "hard", "confirmed_by": "operator", "note": "强制禁行",
+    })
+    bridge.receive(event(task_id, obstacle_id="machine-a", lifecycle="cleared", passability="open"))
+    marks = service.get_bundle(task_id)["road_marks"]["a"]
+    assert marks["authority"] == "hard"
+    assert marks["status"] == "blocked"
+
+def test_box_and_barrier_are_observed_and_locally_detoured():
+    for category in ("box", "barrier"):
+        task_id = driving_task()
+        bridge.set_runtime(task_id, True, 10, True, category)
+        bridge.step_runtime(3)
+        bundle = service.get_bundle(task_id)
+        assert bundle["upstream_simulation"]["generated_count"] == 1
+        obstacle = bundle["semantic_obstacles"][0]
+        assert obstacle["category"] == category
+        assert obstacle["effective_status"] == "blocked"
+        assert bundle["task"]["status"] in ("in_progress", "paused", "blocked")
+        bridge.reset_scene_state("sim_default")
+
+def admin_report(edge_fraction=0.5):
+    return service.create_road_event({
+        "edge_id": "a",
+        "edge_fraction": edge_fraction,
+        "status": "blocked",
+        "scene_id": "sim_default",
+        "source": "admin",
+        "authority": "normal",
+        "confirmed_by": "operator",
+        "note": "管理员上报",
+    })
+
+
+def test_admin_report_needs_two_explicit_recovery_observations():
+    task_id = driving_task()
+    admin_report()
+    other = driving_task()
+    assert any(o["obstacle_id"] == "admin:a" for o in service.get_bundle(other)["semantic_obstacles"])
+    service.script_clear_truth("sim_default", "admin:a")
+    with db.get_conn() as conn:
+        row = conn.execute(
+            "SELECT active, clear_evidence FROM road_known WHERE obstacle_id = 'admin:a'"
+        ).fetchone()
+        assert row["active"] == 1
+        assert row["clear_evidence"] == 0
+    bridge.step_runtime(1)
+    with db.get_conn() as conn:
+        row = conn.execute(
+            "SELECT active, clear_evidence FROM road_known WHERE obstacle_id = 'admin:a'"
+        ).fetchone()
+        assert row["active"] == 1
+        assert row["clear_evidence"] == 1
+    bridge.step_runtime(1)
+    assert all(o["obstacle_id"] != "admin:a" for o in service.get_bundle(task_id)["semantic_obstacles"])
+
+
+def test_admin_whole_road_not_cleared_after_two_observations():
+    task_id = driving_task()
+    admin_report(edge_fraction=None)
+    service.script_clear_truth("sim_default", "admin:a")
+    bridge.step_runtime(1)
+    bridge.step_runtime(1)
+    assert any(o["obstacle_id"] == "admin:a" for o in service.get_bundle(task_id)["semantic_obstacles"])
+
+
+def test_default_reset_keeps_admin_reports_but_drops_machine_ones():
+    task_id = driving_task()
+    admin_report()
+    bridge.set_runtime(task_id, True, 10, True, "pedestrian")
+    bridge.step_runtime(3)
+    bridge.reset_scene_state("sim_default")
+    bundle = service.get_bundle(task_id)
+    assert any(o["obstacle_id"] == "admin:a" for o in bundle["semantic_obstacles"])
+    assert all(o["source"] != "mock_vision_llm" for o in bundle["semantic_obstacles"])
+    with db.get_conn() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM obstacle_truth WHERE obstacle_id = 'admin:a'").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM obstacle_truth WHERE obstacle_id NOT LIKE 'admin:%'").fetchone()[0] == 0

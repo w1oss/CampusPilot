@@ -8,12 +8,13 @@ interface Props {
   map: CampusMap
   bundle: Bundle | null
   selectedEdgeId: string | null
+  selectedFraction: number | null
   autoSim: boolean
   simSpeed: number
   bridgeEnabled: boolean
   onToggleAuto: (value: boolean) => void
   onSpeedChange: (value: number) => void
-  onSelectEdge: (edgeId: string) => void
+  onSelectEdge: (edgeId: string, fraction?: number | null) => void
   onRefresh: (bundle: Bundle) => void
   onOpenReport: () => void
   onError: (message: string) => void
@@ -52,6 +53,7 @@ export default function ExecutionPanel({
   map,
   bundle,
   selectedEdgeId,
+  selectedFraction,
   autoSim,
   simSpeed,
   bridgeEnabled,
@@ -68,7 +70,10 @@ export default function ExecutionPanel({
   const [candidate, setCandidate] = useState<string | null>(null)
   const [candidateNotice, setCandidateNotice] = useState<string | null>(null)
   const [replanNotice, setReplanNotice] = useState<string | null>(null)
-  const [upstreamKind, setUpstreamKind] = useState<'construction' | 'pedestrian' | 'crowd'>('pedestrian')
+  const [upstreamKind, setUpstreamKind] = useState<'construction' | 'pedestrian' | 'crowd' | 'box' | 'barrier'>('pedestrian')
+  const [hardBlock, setHardBlock] = useState(false)
+  const [positionUnknown, setPositionUnknown] = useState(true)
+  const [truthNotice, setTruthNotice] = useState<string | null>(null)
 
   if (!bundle) {
     return (
@@ -92,8 +97,23 @@ export default function ExecutionPanel({
     return run(() => api.setRuntime(task.id, !!bundle?.runtime?.enabled, simSpeed, enabled, category))
   }
 
-  async function clearUpstreamObstacle() {
-    await run(async () => (await api.clearUpstream(task.id)).bundle)
+
+  async function resetScene() {
+    const sceneId = bundle?.scene?.id || 'sim_default'
+    await run(async () => {
+      await api.resetScene(sceneId)
+      setTruthNotice(null)
+      return api.getTask(task.id)
+    })
+  }
+
+  async function scriptRecoverTruth(obstacleId: string) {
+    const sceneId = bundle?.scene?.id || 'sim_default'
+    await run(async () => {
+      const result = await api.clearTruth(sceneId, obstacleId)
+      setTruthNotice(result.notice)
+      return api.getTask(task.id)
+    })
   }
 
   async function run(work: () => Promise<Bundle>) {
@@ -142,12 +162,19 @@ export default function ExecutionPanel({
       onError('请选择道路')
       return
     }
+    if (!positionUnknown && selectedFraction == null) {
+      onError('请先在地图上点击该道路的具体位置，或勾选“位置未知（整段受影响）”')
+      return
+    }
     setBusy(true)
     try {
       await api.createRoadEvent({
         edge_id: selectedEdgeId,
+        edge_fraction: positionUnknown ? null : selectedFraction,
         status: roadStatus,
         source: 'user_text',
+        authority: hardBlock ? 'hard' : 'normal',
+        scene_id: bundle?.scene?.id || 'sim_default',
         confirmed_by: 'operator',
         note: roadNote || '用户上报道路异常',
       })
@@ -348,44 +375,84 @@ export default function ExecutionPanel({
           </label>
           <label className="field"><span>自动模拟场景</span>
             <select className="input input-sm" value={bundle.upstream_simulation?.enabled ? bundle.upstream_simulation.category : upstreamKind}
-              disabled={busy || (!!bundle.upstream_simulation?.enabled && bundle.upstream_simulation.phase === 1)}
+              disabled={busy}
               onChange={(event) => {
                 const category = event.target.value as typeof upstreamKind
                 setUpstreamKind(category)
                 if (bundle.upstream_simulation?.enabled) void configureUpstream(true, category)
               }}>
               <option value="pedestrian">行人横穿</option>
+              <option value="box">纸箱/小障碍</option>
               <option value="construction">施工围挡</option>
+              <option value="barrier">维修栏</option>
               <option value="crowd">人群拥挤</option>
             </select>
           </label>
-          <p className="hint">启用后立即按车辆当前位置发送第一条障碍消息，先停车再计算路线；行人约 3 秒、人群约 30 秒自动解除，施工围挡保持到人工解除。切换页面后仍继续工作。</p>
-          {bundle.upstream_simulation?.enabled ? <p className="candidate">模拟源状态：{
-            bundle.upstream_simulation.phase === 0
-              ? '等待车辆开始行驶，随后立即观测'
-              : bundle.upstream_simulation.phase === 1
-                ? bundle.upstream_simulation.category === 'construction'
-                  ? '施工围挡保持中，需人工解除'
-                  : '已发送障碍，等待上游自动复查解除'
-                : '本轮消息已自动发送完成'
-          }</p> : <p className="hint">模拟源已关闭；外部上游消息接口仍在监听。</p>}
-          {bundle.upstream_simulation?.enabled && bundle.upstream_simulation.phase === 1 ? (
-            <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => { void clearUpstreamObstacle() }}>
-              解除当前模拟障碍
-            </button>
-          ) : null}
-          {bundle.upstream_simulation?.enabled && bundle.upstream_simulation.phase === 2 ? (
-            <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => { void run(async () => {
-              await api.setRuntime(task.id, !!bundle.runtime?.enabled, simSpeed, false)
-              return api.setRuntime(task.id, !!bundle.runtime?.enabled, simSpeed, true, upstreamKind)
-            }) }}>再运行一轮自动模拟</button>
-          ) : null}
+          <p className="hint">启用后持续按车辆位置发现新障碍并先停车，再自动绕行；行车途中经过旧障碍附近时由上游复查，确认恢复后才更新共享路况。施工不会因时间到点自动消失。</p>
+          {bundle.upstream_simulation?.enabled ? <p className="candidate">模拟源状态：持续观测中 · 已发现 {bundle.upstream_simulation.generated_count || 0} 个障碍 · 场景时间 {Math.round(bundle.scene?.virtual_seconds || 0)} 秒</p> : <p className="hint">模拟源已关闭；外部上游消息接口仍在监听。</p>}
+          <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => { void resetScene() }}>
+            重置模拟场景（保留管理员上报）
+          </button>
           {bundle.runtime?.hold_reason ? <p className="hint hint-strong">当前调度：{bundle.runtime.hold_reason}</p> : null}
-          {(bundle.semantic_obstacles || []).map((obstacle) => (
-            <div className="stop-item" key={obstacle.obstacle_id}>
-              <div className="stop-main"><strong>上游发现：{obstacle.edge_id}</strong><p className="hint">{obstacle.summary}</p></div>
-            </div>
-          ))}
+          {(() => {
+            const machine = (bundle.semantic_obstacles || []).filter((o) => o.source !== 'admin')
+            const admin = (bundle.semantic_obstacles || []).filter((o) => o.source === 'admin')
+            const hard = Object.entries(bundle.road_marks || {}).filter(([, mark]) => mark.authority === 'hard')
+            const edgeName = (id: string) => map.edges.find((edge) => edge.id === id)?.name || id
+            const positionText = (obstacle: { position_known?: boolean; edge_fraction?: number | null }) =>
+              obstacle.position_known || obstacle.edge_fraction != null ? '已定位' : '位置未知 · 整段受影响'
+            return (
+              <>
+                {machine.length ? (
+                  <>
+                    <p className="hint hint-strong">机器观测</p>
+                    {machine.map((obstacle) => (
+                      <div className="stop-item" key={obstacle.obstacle_id}>
+                        <div className="stop-main">
+                          <strong>{edgeName(obstacle.edge_id)}（{obstacle.edge_id}）</strong>
+                          <p className="hint">{obstacle.summary || '道路异常'} · {positionText(obstacle)}</p>
+                        </div>
+                        <span className="tag tag-blocked">机器</span>
+                      </div>
+                    ))}
+                  </>
+                ) : null}
+                {admin.length || hard.length ? (
+                  <>
+                    <p className="hint hint-strong">管理员上报</p>
+                    {admin.map((obstacle) => (
+                      <div className="stop-item" key={obstacle.obstacle_id}>
+                        <div className="stop-main">
+                          <strong>{edgeName(obstacle.edge_id)}（{obstacle.edge_id}）</strong>
+                          <p className="hint">
+                            {obstacle.summary || '道路异常'} · {positionText(obstacle)}
+                            {obstacle.clear_evidence ? ` · 恢复确认 ${obstacle.clear_evidence}/2` : ''}
+                          </p>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                          <span className="tag tag-blocked">人工</span>
+                          <button className="btn btn-ghost btn-sm" disabled={busy}
+                            onClick={() => { void scriptRecoverTruth(obstacle.obstacle_id) }}>
+                            模拟现场恢复
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {hard.map(([edgeId]) => (
+                      <div className="stop-item" key={`hard-${edgeId}`}>
+                        <div className="stop-main">
+                          <strong>{edgeName(edgeId)}（{edgeId}）</strong>
+                          <p className="hint">管理员强制禁行 · 机器观测不可解除</p>
+                        </div>
+                        <span className="tag tag-blocked">强制</span>
+                      </div>
+                    ))}
+                  </>
+                ) : null}
+              </>
+            )
+          })()}
+          {truthNotice ? <p className="hint">{truthNotice}</p> : null}
           {bundle.agent_traces.filter((trace) => trace.action === 'observe_road_semantics').slice(-2).reverse().map((trace) => (
             <p className="hint" key={trace.id}>{trace.input_summary} · {trace.output_summary}</p>
           ))}
@@ -400,7 +467,7 @@ export default function ExecutionPanel({
           </div>
           <label className="field">
             <span className="field-label">道路</span>
-            <select className="input input-sm" value={selectedEdgeId || ''} onChange={(event) => onSelectEdge(event.target.value)}>
+            <select className="input input-sm" value={selectedEdgeId || ''} onChange={(event) => { onSelectEdge(event.target.value, null); setPositionUnknown(true) }}>
               <option value="">请选择道路（或点击地图）</option>
               {map.edges.map((edge) => (
                 <option key={edge.id} value={edge.id}>
@@ -437,6 +504,21 @@ export default function ExecutionPanel({
               </button>
             </div>
           </div>
+          <label className="check-field">
+            <input type="checkbox" checked={positionUnknown} onChange={(event) => setPositionUnknown(event.target.checked)} />
+            <span>位置未知（整段受影响，机器不会自动解除整段）</span>
+          </label>
+          {!positionUnknown ? (
+            <p className="hint">
+              {selectedFraction == null
+                ? '请在地图上点击该道路的具体位置'
+                : `已选位置：路段 ${Math.round(selectedFraction * 100)}% 处`}
+            </p>
+          ) : null}
+          <label className="check-field">
+            <input type="checkbox" checked={hardBlock} onChange={(event) => setHardBlock(event.target.checked)} />
+            <span>强制禁行（机器观测不可解除）</span>
+          </label>
           {candidate ? (
             <p className="candidate">
               候选判断：<strong>{candidate === 'blocked' ? '封闭' : candidate === 'congested' ? '拥堵' : candidate}</strong>

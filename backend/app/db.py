@@ -11,6 +11,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
     mode TEXT NOT NULL,
+    scene_id TEXT NOT NULL DEFAULT 'sim_default',
     raw_input TEXT NOT NULL DEFAULT '',
     parser TEXT NOT NULL DEFAULT 'manual',
     pickup_location_id TEXT NOT NULL,
@@ -54,9 +55,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_plans_task_version ON plans(task_id, plan_
 
 CREATE TABLE IF NOT EXISTS road_events (
     id TEXT PRIMARY KEY,
+    scene_id TEXT NOT NULL DEFAULT 'sim_default',
     edge_id TEXT NOT NULL,
+    edge_fraction REAL,
     status TEXT NOT NULL,
     source TEXT NOT NULL,
+    authority TEXT NOT NULL DEFAULT 'normal',
     confirmed_by TEXT NOT NULL,
     note TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
@@ -160,8 +164,51 @@ CREATE TABLE IF NOT EXISTS upstream_simulations (
     category TEXT NOT NULL DEFAULT 'pedestrian',
     phase INTEGER NOT NULL DEFAULT 0,
     elapsed REAL NOT NULL DEFAULT 0,
+    last_edge_id TEXT,
+    next_generate_at REAL NOT NULL DEFAULT 0,
+    generated_count INTEGER NOT NULL DEFAULT 0,
     payload TEXT NOT NULL DEFAULT '{}'
 );
+
+CREATE TABLE IF NOT EXISTS scenes (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL DEFAULT 'sim',
+    virtual_seconds REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS obstacle_truth (
+    scene_id TEXT NOT NULL,
+    obstacle_id TEXT NOT NULL,
+    edge_id TEXT NOT NULL,
+    edge_fraction REAL,
+    category TEXT NOT NULL,
+    present INTEGER NOT NULL DEFAULT 1,
+    clear_at_virtual REAL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (scene_id, obstacle_id)
+);
+
+CREATE TABLE IF NOT EXISTS road_known (
+    scene_id TEXT NOT NULL,
+    obstacle_id TEXT NOT NULL,
+    edge_id TEXT NOT NULL,
+    edge_fraction REAL,
+    category TEXT NOT NULL,
+    status TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    clear_evidence INTEGER NOT NULL DEFAULT 0,
+    source TEXT NOT NULL,
+    authority TEXT NOT NULL DEFAULT 'normal',
+    revision INTEGER NOT NULL DEFAULT 1,
+    observed_at TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (scene_id, obstacle_id)
+);
+CREATE INDEX IF NOT EXISTS idx_road_known_scene ON road_known(scene_id, active);
 """
 
 # One authoritative writer per process. Nested services share the outer transaction,
@@ -201,12 +248,30 @@ def get_conn() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+def _add_missing(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
+
+
 def init_db() -> None:
     with get_conn() as conn:
         conn.executescript(SCHEMA)
-        columns = {row["name"] for row in conn.execute("PRAGMA table_info(sim_runtime)").fetchall()}
-        if "emergency_hold" not in columns:
-            conn.execute("ALTER TABLE sim_runtime ADD COLUMN emergency_hold INTEGER NOT NULL DEFAULT 0")
+        _add_missing(conn, "sim_runtime", "emergency_hold", "emergency_hold INTEGER NOT NULL DEFAULT 0")
+        _add_missing(conn, "tasks", "scene_id", "scene_id TEXT NOT NULL DEFAULT 'sim_default'")
+        _add_missing(conn, "road_events", "scene_id", "scene_id TEXT NOT NULL DEFAULT 'sim_default'")
+        _add_missing(conn, "road_events", "edge_fraction", "edge_fraction REAL")
+        _add_missing(conn, "road_events", "authority", "authority TEXT NOT NULL DEFAULT 'normal'")
+        _add_missing(conn, "road_known", "clear_evidence", "clear_evidence INTEGER NOT NULL DEFAULT 0")
+        _add_missing(conn, "upstream_simulations", "last_edge_id", "last_edge_id TEXT")
+        _add_missing(conn, "upstream_simulations", "next_generate_at", "next_generate_at REAL NOT NULL DEFAULT 0")
+        _add_missing(conn, "upstream_simulations", "generated_count", "generated_count INTEGER NOT NULL DEFAULT 0")
+        stamp = now_iso()
+        conn.execute("INSERT OR IGNORE INTO scenes (id, kind, virtual_seconds, created_at, updated_at) VALUES (?, ?, 0, ?, ?)",
+                     ("sim_default", "sim", stamp, stamp))
+        conn.execute("INSERT OR IGNORE INTO scenes (id, kind, virtual_seconds, created_at, updated_at) VALUES (?, ?, 0, ?, ?)",
+                     ("real_default", "real", stamp, stamp))
+        conn.execute("UPDATE tasks SET scene_id = 'real_default' WHERE mode = 'real' AND scene_id = 'sim_default'")
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:

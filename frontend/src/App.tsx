@@ -21,6 +21,7 @@ export default function App() {
   const [autoSim, setAutoSim] = useState(false)
   const [simSpeed, setSimSpeed] = useState(40)
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null)
+  const [selectedFraction, setSelectedFraction] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -58,7 +59,14 @@ export default function App() {
         setAutoSim(!!next.runtime?.enabled)
         if (next.runtime) setSimSpeed(next.runtime.speed_mps)
       } catch (err) {
-        if (!cancelled) setError(err instanceof ApiError ? err.message : '位置更新失败')
+        if (cancelled) return
+        if (err instanceof ApiError && err.status === 404) {
+          setBundle(null)
+          setAutoSim(false)
+          setError('该任务已被删除，已退出任务页面')
+          return
+        }
+        setError(err instanceof ApiError ? err.message : '位置更新失败')
       }
       if (!cancelled) timer = window.setTimeout(poll, 200)
     }
@@ -207,7 +215,10 @@ export default function App() {
               map={map}
               bundle={bundle}
               selectedEdgeId={selectedEdge}
-              onSelectEdge={setSelectedEdge}
+              onSelectEdge={(edge, fraction) => {
+                setSelectedEdge(edge)
+                setSelectedFraction(fraction ?? null)
+              }}
             />
             <div className="workflow-strip">
               <span className="workflow-step">1 描述需求</span>
@@ -224,12 +235,16 @@ export default function App() {
               map={map}
               bundle={bundle}
               selectedEdgeId={selectedEdge}
+              selectedFraction={selectedFraction}
               autoSim={autoSim}
               simSpeed={simSpeed}
               bridgeEnabled={bridgeEnabled}
               onToggleAuto={(enabled) => { void configureRuntime(enabled, simSpeed) }}
               onSpeedChange={(speed) => { void configureRuntime(autoSim, speed) }}
-              onSelectEdge={setSelectedEdge}
+              onSelectEdge={(edge, fraction) => {
+                setSelectedEdge(edge)
+                setSelectedFraction(fraction ?? null)
+              }}
               onRefresh={refresh}
               onOpenReport={() => setView('report')}
               onError={setError}

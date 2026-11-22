@@ -43,7 +43,7 @@ def decide_dispatch(snapshot: dict[str, Any], hazards: list[dict[str, Any]]) -> 
     if any(h["effective_status"] == "unknown" for h in hazards):
         return {"action": "wait", "reason": "当前路线存在尚未确认的障碍，等待上游复查"}
     blocked = [h for h in hazards if h["effective_status"] == "blocked"]
-    if any(h["category"] == "pedestrian" and (h.get("expected_duration_s") or 0) <= 10 and h.get("age_seconds", 0) < 10 for h in blocked):
+    if any(h["category"] == "pedestrian" and (h.get("expected_duration_s") or 0) <= 180 and h.get("age_seconds", 0) < 10 for h in blocked):
         return {"action": "wait", "reason": "前方行人横穿，暂停并等待解除消息"}
     if blocked:
         return {"action": "replan", "reason": "剩余路线受阻，调用规划工具从当前位置绕行"}

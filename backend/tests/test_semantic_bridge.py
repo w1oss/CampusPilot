@@ -395,7 +395,7 @@ def test_construction_truth_ends_but_known_waits_for_recheck():
     cleared = service.get_bundle(task_id)
     assert cleared["semantic_obstacles"] == []
 
-def test_manual_whole_road_is_not_auto_cleared_by_passing_nearby():
+def test_manual_whole_road_stays_blocked_while_simulated_obstacle_is_present():
     task_id = driving_task()
     service.create_road_event({
         "edge_id": "a", "status": "blocked", "scene_id": "sim_default",
@@ -456,7 +456,7 @@ def test_box_and_barrier_are_generated_with_different_handling():
             assert bundle["task"]["plan_version"] > 1
         bridge.reset_scene_state("sim_default")
 
-def admin_report(edge_fraction=0.5):
+def admin_report(edge_fraction=0.5, **changes):
     return service.create_road_event({
         "edge_id": "a",
         "edge_fraction": edge_fraction,
@@ -466,6 +466,7 @@ def admin_report(edge_fraction=0.5):
         "authority": "normal",
         "confirmed_by": "operator",
         "note": "管理员上报",
+        **changes,
     })
 
 
@@ -492,13 +493,15 @@ def test_admin_report_needs_two_explicit_recovery_observations():
     assert all(o["obstacle_id"] != "admin:a" for o in service.get_bundle(task_id)["semantic_obstacles"])
 
 
-def test_admin_whole_road_not_cleared_after_two_observations():
+def test_admin_whole_road_is_cleared_after_two_explicit_recovery_observations():
     task_id = driving_task()
     admin_report(edge_fraction=None)
     service.script_clear_truth("sim_default", "admin:a")
     bridge.step_runtime(1)
+    assert any(o["obstacle_id"] == "admin:a" and o["clear_evidence"] == 1
+               for o in service.get_bundle(task_id)["semantic_obstacles"])
     bridge.step_runtime(1)
-    assert any(o["obstacle_id"] == "admin:a" for o in service.get_bundle(task_id)["semantic_obstacles"])
+    assert all(o["obstacle_id"] != "admin:a" for o in service.get_bundle(task_id)["semantic_obstacles"])
 
 
 def test_default_reset_keeps_admin_reports_but_drops_machine_ones():

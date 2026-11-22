@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from time import perf_counter
 from typing import Any
 
-from . import agents
+from . import agents, scene_sim
 from .config import SEMANTIC_BRIDGE_ENABLED, SIM_SPEED_MPS
 from .db import dumps, get_conn, loads, now_iso, operation_lock
 from .mapdata import load_map, node_name
@@ -391,6 +391,10 @@ def create_road_event(payload: dict[str, Any]) -> dict[str, Any]:
                     (stamp, scene_id, obstacle_id),
                 )
             else:
+                previous = conn.execute(
+                    "SELECT revision FROM road_known WHERE scene_id = ? AND obstacle_id = ?",
+                    (scene_id, obstacle_id),
+                ).fetchone()
                 upsert_known(
                     conn,
                     scene_id,
@@ -403,7 +407,7 @@ def create_road_event(payload: dict[str, Any]) -> dict[str, Any]:
                         "lifecycle": "observed",
                         "source": "admin",
                         "observed_at": stamp,
-                        "revision": 1,
+                        "revision": int(previous["revision"]) + 1 if previous else 1,
                         "summary": payload.get("note") or (
                             "管理员上报道路异常（位置未知，整段受影响）"
                             if payload.get("edge_fraction") is None
@@ -415,14 +419,7 @@ def create_road_event(payload: dict[str, Any]) -> dict[str, Any]:
                     source="admin",
                     authority="normal",
                 )
-                conn.execute(
-                    "INSERT INTO obstacle_truth (scene_id, obstacle_id, edge_id, edge_fraction, category, present,"
-                    " clear_at_virtual, created_at, updated_at) VALUES (?, ?, ?, ?, 'other', 1, NULL, ?, ?)"
-                    " ON CONFLICT(scene_id, obstacle_id) DO UPDATE SET edge_id = excluded.edge_id,"
-                    " edge_fraction = excluded.edge_fraction, category = excluded.category, present = 1,"
-                    " clear_at_virtual = NULL, updated_at = excluded.updated_at",
-                    (scene_id, obstacle_id, payload["edge_id"], payload.get("edge_fraction"), stamp, stamp),
-                )
+                scene_sim.set_admin_truth(conn, scene_id, obstacle_id, payload["edge_id"], payload.get("edge_fraction"), stamp)
                 conn.execute(
                     "UPDATE road_known SET clear_evidence = 0 WHERE scene_id = ? AND obstacle_id = ?",
                     (scene_id, obstacle_id),

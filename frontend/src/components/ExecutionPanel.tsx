@@ -425,7 +425,7 @@ export default function ExecutionPanel({
                         <div className="stop-main">
                           <strong>{edgeName(obstacle.edge_id)}（{obstacle.edge_id}）</strong>
                           <p className="hint">
-                            {obstacle.summary || '道路异常'} · {positionText(obstacle)}
+                            {obstacle.summary || '道路异常'} · {obstacle.edge_fraction == null ? '整段上报 · 可在相连路口复查' : positionText(obstacle)}
                             {obstacle.clear_evidence ? ` · 恢复确认 ${obstacle.clear_evidence}/2` : ''}
                           </p>
                         </div>
@@ -506,7 +506,7 @@ export default function ExecutionPanel({
           </div>
           <label className="check-field">
             <input type="checkbox" checked={positionUnknown} onChange={(event) => setPositionUnknown(event.target.checked)} />
-            <span>位置未知（整段受影响，机器不会自动解除整段）</span>
+            <span>{bundle.task.mode === 'sim' ? '位置未知（整段上报，可在相连路口复查）' : '位置未知（整段受影响）'}</span>
           </label>
           {!positionUnknown ? (
             <p className="hint">
@@ -519,6 +519,7 @@ export default function ExecutionPanel({
             <input type="checkbox" checked={hardBlock} onChange={(event) => setHardBlock(event.target.checked)} />
             <span>强制禁行（机器观测不可解除）</span>
           </label>
+          {bundle.task.mode === 'sim' ? <p className="hint">普通人工上报参与自动复查：演示现场约 60 秒后恢复，已知路况仍保持，直到车辆在相连路口或观察范围内连续两次明确确认恢复。强制禁行由管理员解除。</p> : null}
           {candidate ? (
             <p className="candidate">
               候选判断：<strong>{candidate === 'blocked' ? '封闭' : candidate === 'congested' ? '拥堵' : candidate}</strong>

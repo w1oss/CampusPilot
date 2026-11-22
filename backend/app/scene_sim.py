@@ -18,6 +18,7 @@ OBSERVE_RADIUS_M = 20.0
 METER_PER_PIXEL = 0.28
 GENERATE_COOLDOWN_VIRTUAL = 60.0
 ACTIVE_LIMIT = 6
+ADMIN_TRUTH_DURATION_SECONDS = 3600.0  # Virtual seconds; 60 real seconds at the demo scale.
 TRUTH_DURATION_SECONDS = {
     "pedestrian": 120.0,
     "crowd": 600.0,
@@ -44,12 +45,38 @@ def ensure_scene(conn, scene_id: str) -> float:
     return float(row["virtual_seconds"]) if row else 0.0
 
 
+def set_admin_truth(conn, scene_id, obstacle_id, edge_id, fraction, stamp) -> None:
+    """Ordinary reports seed a finite demo scenario, not a permanent prohibition."""
+    virtual = ensure_scene(conn, scene_id)
+    scene = conn.execute("SELECT kind FROM scenes WHERE id = ?", (scene_id,)).fetchone()
+    clear_at = virtual + ADMIN_TRUTH_DURATION_SECONDS if scene["kind"] == "sim" else None
+    conn.execute(
+        "INSERT INTO obstacle_truth (scene_id, obstacle_id, edge_id, edge_fraction, category, present,"
+        " clear_at_virtual, created_at, updated_at) VALUES (?, ?, ?, ?, 'other', 1, ?, ?, ?)"
+        " ON CONFLICT(scene_id, obstacle_id) DO UPDATE SET edge_id = excluded.edge_id,"
+        " edge_fraction = excluded.edge_fraction, category = excluded.category, present = 1,"
+        " clear_at_virtual = excluded.clear_at_virtual, updated_at = excluded.updated_at",
+        (scene_id, obstacle_id, edge_id, fraction, clear_at, stamp, stamp),
+    )
+
+
 def advance_clock(conn, real_seconds: float) -> None:
     """Advance every scene clock; the scripted world may end while known state stays."""
     stamp = now_iso()
-    for row in conn.execute("SELECT id, virtual_seconds FROM scenes").fetchall():
+    for row in conn.execute("SELECT id, kind, virtual_seconds FROM scenes").fetchall():
         virtual = float(row["virtual_seconds"]) + real_seconds * VIRTUAL_TIME_SCALE
         conn.execute("UPDATE scenes SET virtual_seconds = ?, updated_at = ? WHERE id = ?", (virtual, stamp, row["id"]))
+        if row["kind"] != "sim":
+            continue
+        # Adopt old indefinite ordinary admin reports once, relative to the
+        # current scene clock. Do not clear known status or infer elapsed time.
+        conn.execute(
+            "UPDATE obstacle_truth SET clear_at_virtual = ?, updated_at = ?"
+            " WHERE scene_id = ? AND present = 1 AND clear_at_virtual IS NULL"
+            " AND obstacle_id IN (SELECT obstacle_id FROM road_known WHERE scene_id = ?"
+            " AND source = 'admin' AND authority = 'normal' AND active = 1)",
+            (float(row["virtual_seconds"]) + ADMIN_TRUTH_DURATION_SECONDS, stamp, row["id"], row["id"]),
+        )
         conn.execute(
             "UPDATE obstacle_truth SET present = 0, updated_at = ?"
             " WHERE scene_id = ? AND present = 1 AND clear_at_virtual IS NOT NULL AND clear_at_virtual <= ?",
@@ -231,6 +258,7 @@ def recheck_messages(conn) -> list[dict[str, Any]]:
         state = _state(conn, task_id)
         if state is None or state["position_x"] is None:
             continue
+        directions = visible_road_directions(mapdata, state)
         known = conn.execute(
             "SELECT * FROM road_known WHERE scene_id = ? AND active = 1 ORDER BY observed_at",
             (scene_id,),
@@ -239,10 +267,15 @@ def recheck_messages(conn) -> list[dict[str, Any]]:
             key = (scene_id, row["obstacle_id"])
             if key in seen:
                 continue
-            if row["authority"] == "hard" or row["edge_fraction"] is None:
-                # Whole-road report: a clear entrance cannot prove the rest is open.
+            if row["authority"] == "hard":
                 continue
-            if not observable(mapdata, state, row["edge_id"], row["edge_fraction"], row["category"]):
+            # The simplified simulation can inspect a whole ordinary reported
+            # road from its connection, even if no point/category was supplied.
+            admin_visible = row["source"] == "admin" and row["edge_id"] in directions
+            point_visible = row["edge_fraction"] is not None and observable(
+                mapdata, state, row["edge_id"], row["edge_fraction"], row["category"]
+            )
+            if not (admin_visible or point_visible):
                 continue
             truth = conn.execute(
                 "SELECT present FROM obstacle_truth WHERE scene_id = ? AND obstacle_id = ?",
@@ -300,10 +333,18 @@ def step(conn, real_seconds: float) -> list[dict[str, Any]]:
 
 def reset_scene(conn, scene_id: str, include_admin: bool = False) -> None:
     stamp = now_iso()
+    virtual = ensure_scene(conn, scene_id)
     if include_admin:
         conn.execute("DELETE FROM obstacle_truth WHERE scene_id = ?", (scene_id,))
         conn.execute("DELETE FROM road_known WHERE scene_id = ?", (scene_id,))
     else:
+        # The clock will restart at zero. Preserve remaining admin scenario
+        # duration rather than leaving a deadline on the previous time axis.
+        conn.execute(
+            "UPDATE obstacle_truth SET clear_at_virtual = MAX(0, clear_at_virtual - ?)"
+            " WHERE scene_id = ? AND obstacle_id LIKE 'admin:%' AND clear_at_virtual IS NOT NULL",
+            (virtual, scene_id),
+        )
         conn.execute(
             "DELETE FROM obstacle_truth WHERE scene_id = ? AND obstacle_id NOT LIKE 'admin:%'",
             (scene_id,),

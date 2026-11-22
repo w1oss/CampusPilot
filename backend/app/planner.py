@@ -7,7 +7,7 @@ from typing import Any
 from .config import DEFAULT_DWELL_SECONDS, SPEED_MPS
 from .graph import PathResult, dijkstra
 from .mapdata import MapData, node_name
-from .simulator import split_polyline
+from .simulator import split_polyline, is_local_box
 
 
 def plan_from_position(
@@ -36,7 +36,7 @@ def plan_from_position(
     before, after = split_polyline([list(p) for p in edge["polyline"]], fraction)
     before[-1] = [state["position_x"], state["position_y"]]
     after[0] = before[-1]
-    blocks = [o for o in obstacles if o["edge_id"] == edge["id"] and o["effective_status"] in ("blocked", "unknown")]
+    blocks = [o for o in obstacles if o["edge_id"] == edge["id"] and o["effective_status"] in ("blocked", "unknown") and not is_local_box(o)]
     whole_block = baseline_status.get(edge["id"], edge.get("base_status", "open")) == "blocked"
     seeds: dict[str, dict[str, Any]] = {}
     statuses = dict(road_status)

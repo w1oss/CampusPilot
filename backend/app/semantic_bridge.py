@@ -28,6 +28,7 @@ from .config import (
 from .db import dumps, get_conn, loads, now_iso
 from .mapdata import load_map
 from .schemas import SemanticEventRequest, SimRuntimeRequest
+from .simulator import is_local_box
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -47,6 +48,8 @@ def normalized_status(observation: dict[str, Any]) -> str:
 
 def should_stop(conn, task_id: str, observation: dict[str, Any]) -> bool:
     """Fast safety gate: only the road state matters here, not route planning."""
+    if is_local_box(observation):
+        return False
     if observation.get("lifecycle") == "cleared" or normalized_status(observation) == "open":
         return False
     task = conn.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
@@ -155,7 +158,7 @@ def coordinate(conn, task_id: str) -> dict[str, Any]:
                 " WHERE task_id = ?",
                 ("剩余任务不可达，等待障碍解除或人工处理", int(may_resume), task_id),
             )
-    elif action == "continue" and runtime["hold_reason"]:
+    elif action in ("continue", "local_avoid") and runtime["hold_reason"]:
         if runtime["auto_resume"] and snapshot["task"]["status"] == "paused":
             service.apply_dispatch_status(task_id, "in_progress")
         conn.execute(

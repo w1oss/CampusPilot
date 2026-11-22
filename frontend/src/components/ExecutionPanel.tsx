@@ -388,7 +388,7 @@ export default function ExecutionPanel({
               <option value="crowd">人群拥挤</option>
             </select>
           </label>
-          <p className="hint">启用后持续按车辆位置发现新障碍并先停车，再自动绕行；行车途中经过旧障碍附近时由上游复查，确认恢复后才更新共享路况。施工不会因时间到点自动消失。</p>
+          <p className="hint">持续观测：施工和维修栏会触发停车与绕行；接近路口 20 米内，可复查该路口直接相连的整条道路，不受路段长度限制。纸箱在 10 米内观察，以紫色小弧线在原路段避让，不重规划。只有明确观测到恢复才解除封路。</p>
           {bundle.upstream_simulation?.enabled ? <p className="candidate">模拟源状态：持续观测中 · 已发现 {bundle.upstream_simulation.generated_count || 0} 个障碍 · 场景时间 {Math.round(bundle.scene?.virtual_seconds || 0)} 秒</p> : <p className="hint">模拟源已关闭；外部上游消息接口仍在监听。</p>}
           <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => { void resetScene() }}>
             重置模拟场景（保留管理员上报）
@@ -410,7 +410,7 @@ export default function ExecutionPanel({
                       <div className="stop-item" key={obstacle.obstacle_id}>
                         <div className="stop-main">
                           <strong>{edgeName(obstacle.edge_id)}（{obstacle.edge_id}）</strong>
-                          <p className="hint">{obstacle.summary || '道路异常'} · {positionText(obstacle)}</p>
+                          <p className="hint">{obstacle.summary || '道路异常'} · {positionText(obstacle)}{obstacle.handling === 'local_avoidance' ? ' · 局部避让，道路可通行' : ''}</p>
                         </div>
                         <span className="tag tag-blocked">机器</span>
                       </div>

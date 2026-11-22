@@ -94,6 +94,7 @@ python mock_upstream.py --demo --category pedestrian --delay 0 --clear-after 0
 ```
 
 消息协议、配置开关、接口和模块分工见 [实时语义接入说明](docs/realtime-semantics.md)。
+简化可视与避让：距路口 20 米内可复查直接相连道路上的施工/维修栏，不受路段长度限制；纸箱按 10 米范围观察，在原道路上用紫色短弧线避让，不触发全局绕路。恢复仍需明确观测，强制禁行继续优先。
 模拟后台使用单个后端 worker，沿用 `python run.py` 启动即可。
 
 ## 配置真实模型

@@ -10,7 +10,7 @@ from .db import dumps, get_conn, loads, now_iso, operation_lock
 from .mapdata import load_map, node_name
 from .planner import build_plan, plan_from_position
 from .report import build_report
-from .simulator import advance, obstacle_ahead
+from .simulator import advance, obstacle_ahead, is_local_box, local_avoidance
 
 
 def serialized(function):
@@ -137,6 +137,7 @@ def known_obstacles(conn, scene_id: str) -> list[dict[str, Any]]:
                 "clear_evidence": row["clear_evidence"],
             }
         )
+        payload["handling"] = "local_avoidance" if is_local_box(payload) else "road_status"
         result.append(payload)
     return result
 
@@ -286,6 +287,8 @@ def get_road_status(conn, task_id: str | None = None, scene_id: str | None = Non
             status[row["edge_id"]] = row["status"]
     if mode != "real":
         for obstacle in known_obstacles(conn, target_scene):
+            if is_local_box(obstacle):
+                continue
             value = obstacle["effective_status"]
             edge_id = obstacle["edge_id"]
             if STATUS_RANK.get(value, 0) > STATUS_RANK.get(status.get(edge_id, "open"), 0):
@@ -303,6 +306,8 @@ def road_marks(conn, task_id: str) -> dict[str, dict[str, Any]]:
     scene_id = task_scene(conn, task_id)
     marks: dict[str, dict[str, Any]] = {}
     for obstacle in known_obstacles(conn, scene_id):
+        if is_local_box(obstacle):
+            continue
         edge_id = obstacle["edge_id"]
         item = marks.setdefault(
             edge_id,
@@ -719,6 +724,7 @@ def get_bundle(task_id: str) -> dict[str, Any]:
             "upstream_simulation": upstream_public(conn, task_id),
             "scene": scene_public(conn, task_scene(conn, task_id)),
         }
+        bundle["local_avoidance"] = local_avoidance(mapdata, state, bundle["semantic_obstacles"]) if task["mode"] == "sim" else None
         return bundle
 
 

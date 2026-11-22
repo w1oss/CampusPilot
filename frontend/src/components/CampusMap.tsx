@@ -275,6 +275,19 @@ export default function CampusMap({ map, bundle, selectedEdgeId, onSelectEdge }:
           </>
         ) : null}
         {statusLayer}
+        {bundle?.local_avoidance ? (
+          <g pointerEvents="none" aria-label="纸箱局部避让">
+            <polyline points={toPoints(bundle.local_avoidance.polyline)} fill="none" stroke="#fffdf7" strokeWidth={scaleValue(5)} />
+            <polyline points={toPoints(bundle.local_avoidance.polyline)} fill="none" stroke="#8052ad" strokeWidth={scaleValue(2)} strokeLinecap="round">
+              <title>纸箱局部避让：沿小弧线通过，配送路线不变</title>
+            </polyline>
+            {bundle.local_avoidance.obstacles.map((point, index) => (
+              <rect key={index} x={point.x - 4} y={point.y - 4} width={8} height={8} fill="#b77732" stroke="#fffdf7" strokeWidth={1}>
+                <title>纸箱（局部障碍，道路保持可通行）</title>
+              </rect>
+            ))}
+          </g>
+        ) : null}
 
         {nodes.map((node) => {
           if (node.kind === 'location') {

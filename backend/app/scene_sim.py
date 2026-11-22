@@ -95,20 +95,31 @@ def _edge_distance(mapdata, edge: dict[str, Any], x: float, y: float, fraction: 
     )
 
 
-def observable(mapdata, state, edge_id: str, fraction: float | None) -> bool:
-    """Same edge or a road sharing one junction, and the original spot within 20 m."""
+def observable(mapdata, state, edge_id: str, fraction: float | None, category: str = "other") -> bool:
+    """Simple demo visibility, not a camera/occlusion model.
+
+    Within 20 m of a junction, construction/barriers on its incident edges are
+    visible over the entire segment, regardless of length. Never recurse beyond
+    that junction. Boxes need their original position inside a 10 m radius.
+    """
     if not state or state["position_x"] is None:
         return False
     current_id = state["current_edge_id"]
     edge = mapdata.edges.get(edge_id)
     if edge is None:
         return False
+    x, y = float(state["position_x"]), float(state["position_y"])
+    current = mapdata.edges.get(current_id) if current_id else None
+    if category in ("construction", "barrier"):
+        candidates = ({current["from"], current["to"]} if current else {state["last_node_id"]}) & {edge["from"], edge["to"]}
+        if any(math.hypot(mapdata.nodes[node]["x"] - x, mapdata.nodes[node]["y"] - y)
+               * METER_PER_PIXEL <= OBSERVE_RADIUS_M for node in candidates):
+            return True
     if current_id and current_id != edge_id:
-        current = mapdata.edges.get(current_id)
         if current is None or not ({current["from"], current["to"]} & {edge["from"], edge["to"]}):
             return False
-    distance_px = _edge_distance(mapdata, edge, float(state["position_x"]), float(state["position_y"]), fraction)
-    return distance_px * METER_PER_PIXEL <= OBSERVE_RADIUS_M
+    distance_px = _edge_distance(mapdata, edge, x, y, fraction)
+    return distance_px * METER_PER_PIXEL <= (10.0 if category == "box" else OBSERVE_RADIUS_M)
 
 
 def _state(conn, task_id: str):
@@ -145,11 +156,15 @@ def generation_messages(conn) -> list[dict[str, Any]]:
             continue
         edge = mapdata.edges[edge_id]
         progress = float(state["edge_progress"] or 0)
-        offset = min(0.9, 10.0 / max(1.0, float(edge["distance_m"])))
-        fraction = min(0.95, progress + offset)
+        category = row["category"]
+        if progress >= 0.995:
+            continue
+        # Boxes are first seen within 10 geometric metres, just before the arc.
+        geometry_m = sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(edge["polyline"], edge["polyline"][1:])) * METER_PER_PIXEL
+        offset = min(0.9, 9.0 / max(0.1, geometry_m)) if category == "box" else min(0.9, 10.0 / max(1.0, float(edge["distance_m"])))
+        fraction = min(0.995, progress + offset)
         if state["last_node_id"] == edge["to"]:
             fraction = 1.0 - fraction
-        category = row["category"]
         duration = TRUTH_DURATION_SECONDS.get(category, 600.0)
         obstacle_id = f"auto_{uuid.uuid4().hex[:12]}"
         stamp = now_iso()
@@ -184,7 +199,7 @@ def generation_messages(conn) -> list[dict[str, Any]]:
 
 
 def recheck_messages(conn) -> list[dict[str, Any]]:
-    """En-route recheck: only the original obstacle location inside viewing range counts."""
+    """An actual observation is required; merely timing out never clears knowledge."""
     mapdata = load_map()
     messages: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
@@ -206,10 +221,10 @@ def recheck_messages(conn) -> list[dict[str, Any]]:
             key = (scene_id, row["obstacle_id"])
             if key in seen:
                 continue
-            if row["edge_fraction"] is None:
+            if row["authority"] == "hard" or row["edge_fraction"] is None:
                 # Whole-road report: a clear entrance cannot prove the rest is open.
                 continue
-            if not observable(mapdata, state, row["edge_id"], row["edge_fraction"]):
+            if not observable(mapdata, state, row["edge_id"], row["edge_fraction"], row["category"]):
                 continue
             truth = conn.execute(
                 "SELECT present FROM obstacle_truth WHERE scene_id = ? AND obstacle_id = ?",

@@ -166,6 +166,7 @@ export interface SemanticEvent {
 }
 
 export interface SemanticObstacle {
+  handling?: 'local_avoidance' | 'road_status'
   obstacle_id: string
   edge_id: string
   edge_fraction?: number | null
@@ -240,6 +241,7 @@ export interface ReplanDiff {
 }
 
 export interface Bundle {
+  local_avoidance?: { edge_id: string; kind: 'box'; polyline: [number, number][]; obstacles: { x: number; y: number }[] } | null
   task: Task
   stops: Stop[]
   plan: Plan | null

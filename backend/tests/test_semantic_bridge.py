@@ -433,7 +433,7 @@ def test_hard_block_cannot_be_cleared_by_machine_observation():
     assert marks["authority"] == "hard"
     assert marks["status"] == "blocked"
 
-def test_box_and_barrier_are_observed_and_locally_detoured():
+def test_box_and_barrier_are_generated_with_different_handling():
     for category in ("box", "barrier"):
         task_id = driving_task()
         bridge.set_runtime(task_id, True, 10, True, category)
@@ -444,6 +444,16 @@ def test_box_and_barrier_are_observed_and_locally_detoured():
         assert obstacle["category"] == category
         assert obstacle["effective_status"] == "blocked"
         assert bundle["task"]["status"] in ("in_progress", "paused", "blocked")
+        if category == "box":
+            assert obstacle["handling"] == "local_avoidance"
+            assert bundle["task"]["plan_version"] == 1
+            assert bundle["task"]["status"] == "in_progress"
+            assert "a" not in bundle["road_status"]
+            assert bundle["local_avoidance"]
+            assert bundle["state"]["position"]["y"] > 0
+        else:
+            assert obstacle["handling"] == "road_status"
+            assert bundle["task"]["plan_version"] > 1
         bridge.reset_scene_state("sim_default")
 
 def admin_report(edge_fraction=0.5):
@@ -503,3 +513,69 @@ def test_default_reset_keeps_admin_reports_but_drops_machine_ones():
     with db.get_conn() as conn:
         assert conn.execute("SELECT COUNT(*) FROM obstacle_truth WHERE obstacle_id = 'admin:a'").fetchone()[0] == 1
         assert conn.execute("SELECT COUNT(*) FROM obstacle_truth WHERE obstacle_id NOT LIKE 'admin:%'").fetchone()[0] == 0
+
+
+def test_located_box_does_not_stop_replan_or_disappear_when_passed():
+    task_id = driving_task()
+    before = service.get_bundle(task_id)
+    result = bridge.receive(event(task_id, category="box", summary="前方纸箱"))
+    assert result["decision"]["action"] == "local_avoid"
+    assert result["bundle"]["task"]["status"] == "in_progress"
+    assert result["bundle"]["task"]["plan_version"] == before["task"]["plan_version"]
+    assert not result["bundle"]["runtime"]["emergency_hold"]
+    assert all(item["type"] != "safety_stop" for item in result["bundle"]["timeline"])
+    curved = service.sim_tick(task_id, 3, 10)
+    assert curved["state"]["position"]["x"] == 70
+    assert curved["state"]["position"]["y"] > 0
+    assert curved["local_avoidance"]["polyline"]
+    assert curved["plan"]["route_edge_ids"] == before["plan"]["route_edge_ids"]
+    final = service.sim_tick(task_id, 100, 10)
+    assert final["state"]["position"] == {"x": 100, "y": 100}
+    assert final["sim"]["waiting"] == "awaiting_delivery"
+    assert final["semantic_obstacles"][0]["active"]  # Passing a box does not remove it.
+
+
+@pytest.mark.parametrize("changes", [{"edge_fraction": None}, {"confidence": 0.4}, {"passability": "unknown"}])
+def test_uncertain_box_still_uses_safety_gate(changes):
+    task_id = driving_task()
+    result = bridge.receive(event(task_id, category="box", **changes))
+    assert result["decision"]["action"] != "local_avoid"
+    assert any(item["type"] == "safety_stop" for item in result["bundle"]["timeline"])
+
+
+def test_local_box_cannot_override_forced_closure():
+    task_id = driving_task()
+    service.create_road_event({"edge_id": "a", "status": "blocked", "scene_id": "sim_default",
+                               "authority": "hard", "confirmed_by": "operator", "note": "强制禁行"})
+    result = bridge.receive(event(task_id, category="box"))
+    assert result["decision"]["action"] == "replan"
+    assert result["bundle"]["task"]["status"] == "blocked"
+    assert result["bundle"]["road_status"]["a"] == "blocked"
+
+
+def test_replanning_for_other_reasons_does_not_treat_box_as_a_closed_road():
+    task_id = driving_task()
+    bridge.receive(event(task_id, category="box"))
+    replanned = service.replan(task_id, "重新比较路线")
+    assert replanned["plan"]["route_edge_ids"] == ["a", "b"]
+    assert replanned["state"]["last_node_id"] == "pickup"
+    assert replanned["state"]["position"] == {"x": 40, "y": 0}
+
+
+@pytest.mark.parametrize("category", ["construction", "barrier"])
+def test_large_obstacle_recheck_needs_recovery_evidence_at_shared_junction(category):
+    task_id = driving_task()
+    bridge.set_runtime(task_id, True, 10, True, category)
+    bridge.step_runtime(0.1)
+    action(task_id, "pause")
+    # Observe road a from b near their junction; never enter the closed road.
+    with db.get_conn() as conn:
+        conn.execute("UPDATE execution_state SET current_edge_id = 'b', last_node_id = 'junction',"
+                     " position_x = 100, position_y = 5 WHERE task_id = ?", (task_id,))
+        assert scene_sim.recheck_messages(conn) == []  # Still present: no false clear.
+        conn.execute("UPDATE obstacle_truth SET present = 0")
+        messages = scene_sim.recheck_messages(conn)
+    assert len(messages) == 1
+    assert messages[0]["lifecycle"] == "cleared"
+    bridge.receive(messages[0])
+    assert service.get_bundle(task_id)["semantic_obstacles"] == []

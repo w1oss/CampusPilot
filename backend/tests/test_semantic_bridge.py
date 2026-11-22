@@ -277,3 +277,68 @@ def test_initial_plan_cannot_reset_a_moving_vehicle():
     with pytest.raises(service.ApiError, match="保留当前位置"):
         service.generate_plan(task_id)
     assert service.get_bundle(task_id)["state"]["position"] == {"x": 40, "y": 0}
+
+
+def test_automatic_source_observes_and_clears_without_admin_or_browser():
+    task_id = driving_task()
+    bridge.set_runtime(task_id, True, 10, True, "pedestrian")
+    bridge.step_runtime(3)
+    stopped = service.get_bundle(task_id)
+    assert stopped["task"]["status"] == "paused"
+    assert stopped["upstream_simulation"]["phase"] == 1
+    assert stopped["semantic_obstacles"][0]["edge_id"] == "a"
+    assert stopped["semantic_obstacles"][0]["edge_fraction"] > 0.4
+    assert stopped["state"]["position"] == {"x": 40, "y": 0}
+    bridge.step_runtime(3)
+    cleared = service.get_bundle(task_id)
+    assert cleared["task"]["status"] == "in_progress"
+    assert cleared["semantic_obstacles"] == []
+    assert cleared["upstream_simulation"]["phase"] == 2
+    assert cleared["state"]["position"]["x"] > 40
+    with db.get_conn() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM semantic_events").fetchone()[0] == 2
+        assert conn.execute("SELECT COUNT(*) FROM road_events").fetchone()[0] == 0
+    bridge.step_runtime(1)
+    with db.get_conn() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM semantic_events").fetchone()[0] == 2
+
+
+def test_source_clear_keeps_manual_pause_and_does_not_lose_pending_obstacle():
+    task_id = driving_task()
+    bridge.set_runtime(task_id, True, 10, True)
+    bridge.step_runtime(3)
+    action(task_id, "pause")
+    bridge.set_runtime(task_id, True, 10, False)
+    bridge.step_runtime(3)
+    assert service.get_bundle(task_id)["semantic_obstacles"]
+    bridge.set_runtime(task_id, True, 10, True)
+    bridge.step_runtime(3)
+    final = service.get_bundle(task_id)
+    assert final["semantic_obstacles"] == []
+    assert final["task"]["status"] == "paused"
+
+
+def test_speed_changes_do_not_rearm_automatic_source():
+    task_id = driving_task()
+    bridge.set_runtime(task_id, True, 10, True)
+    bridge.step_runtime(1)
+    elapsed = service.get_bundle(task_id)["upstream_simulation"]["elapsed"]
+    bridge.set_runtime(task_id, True, 15, True)
+    assert service.get_bundle(task_id)["upstream_simulation"]["elapsed"] == elapsed
+
+
+def test_external_source_does_not_enable_automatic_simulator():
+    task_id = driving_task()
+    bridge.set_runtime(task_id, True, 10)
+    bridge.step_runtime(3)
+    assert service.get_bundle(task_id)["upstream_simulation"]["enabled"] is False
+    with db.get_conn() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM semantic_events").fetchone()[0] == 0
+
+
+def test_changing_speed_before_first_start_keeps_default_source_unconfigured():
+    task_id = driving_task()
+    bridge.set_runtime(task_id, False, 5)
+    assert service.get_bundle(task_id)["upstream_simulation"]["configured"] is False
+    bridge.set_runtime(task_id, True, 5, True)
+    assert service.get_bundle(task_id)["upstream_simulation"]["enabled"] is True

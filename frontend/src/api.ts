@@ -72,8 +72,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ seconds, speed_mps: speedMps ?? null }),
     }),
-  setRuntime: (id: string, enabled: boolean, speedMps: number) =>
-    request<Bundle>(`/api/tasks/${id}/sim/runtime`, { method: 'POST', body: JSON.stringify({ enabled, speed_mps: speedMps }) }),
+  setRuntime: (id: string, enabled: boolean, speedMps: number, autoUpstream = false, upstreamCategory = 'pedestrian') =>
+    request<Bundle>(`/api/tasks/${id}/sim/runtime`, { method: 'POST', body: JSON.stringify({ enabled, speed_mps: speedMps, auto_upstream: autoUpstream, upstream_category: upstreamCategory }) }),
   semanticEvent: (payload: SemanticEvent) =>
     request<{ accepted: boolean; duplicate: boolean; decision: { action: string; reason: string }; bundle: Bundle }>(
       '/api/semantic-events', { method: 'POST', body: JSON.stringify(payload) },

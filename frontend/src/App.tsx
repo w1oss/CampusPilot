@@ -103,7 +103,8 @@ export default function App() {
       return
     }
     try {
-      const next = await api.setRuntime(taskId, enabled, speed)
+      const source = bundle?.upstream_simulation
+      const next = await api.setRuntime(taskId, enabled, speed, source?.configured ? source.enabled : enabled, source?.category || 'pedestrian')
       setBundle(next)
       setAutoSim(!!next.runtime?.enabled)
       setSimSpeed(speed)

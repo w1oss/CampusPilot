@@ -153,6 +153,14 @@ CREATE TABLE IF NOT EXISTS sim_runtime (
     waiting TEXT,
     updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS upstream_simulations (
+    task_id TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    category TEXT NOT NULL DEFAULT 'pedestrian',
+    phase INTEGER NOT NULL DEFAULT 0,
+    elapsed REAL NOT NULL DEFAULT 0,
+    payload TEXT NOT NULL DEFAULT '{}'
+);
 """
 
 # One authoritative writer per process. Nested services share the outer transaction,

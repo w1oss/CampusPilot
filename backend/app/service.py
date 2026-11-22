@@ -104,6 +104,14 @@ def runtime_public(conn, task_id: str) -> dict[str, Any]:
     return {**dict(row), "enabled": bool(row["enabled"]) and SEMANTIC_BRIDGE_ENABLED, "auto_resume": bool(row["auto_resume"])}
 
 
+def upstream_public(conn, task_id: str) -> dict[str, Any]:
+    row = conn.execute("SELECT * FROM upstream_simulations WHERE task_id = ?", (task_id,)).fetchone()
+    if not row:
+        return {"enabled": False, "configured": False, "category": "pedestrian", "phase": 0, "elapsed": 0}
+    return {"enabled": bool(row["enabled"]) and SEMANTIC_BRIDGE_ENABLED, "configured": True,
+            "category": row["category"], "phase": row["phase"], "elapsed": row["elapsed"]}
+
+
 def route_hazards(conn, task_id: str) -> list[dict[str, Any]]:
     state = _state_row(conn, task_id)
     if not state:
@@ -412,6 +420,7 @@ def get_bundle(task_id: str) -> dict[str, Any]:
             "map_version": mapdata.map_version,
             "runtime": runtime_public(conn, task_id),
             "semantic_obstacles": active_obstacles(conn, task_id),
+            "upstream_simulation": upstream_public(conn, task_id),
         }
         return bundle
 

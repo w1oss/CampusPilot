@@ -1,5 +1,5 @@
 import { api, ApiError, newRequestId } from '../api.js'
-import type { Bundle, CampusMap, SemanticObstacle } from '../types'
+import type { Bundle, CampusMap } from '../types'
 
 const React = window.React
 const { useState } = React
@@ -68,9 +68,7 @@ export default function ExecutionPanel({
   const [candidate, setCandidate] = useState<string | null>(null)
   const [candidateNotice, setCandidateNotice] = useState<string | null>(null)
   const [replanNotice, setReplanNotice] = useState<string | null>(null)
-  const [upstreamKind, setUpstreamKind] = useState<'construction' | 'pedestrian' | 'crowd'>('construction')
-  const [obstaclePercent, setObstaclePercent] = useState('70')
-  const [upstreamNotice, setUpstreamNotice] = useState('')
+  const [upstreamKind, setUpstreamKind] = useState<'construction' | 'pedestrian' | 'crowd'>('pedestrian')
 
   if (!bundle) {
     return (
@@ -90,33 +88,8 @@ export default function ExecutionPanel({
   const activeStop = bundle.stops.find((s) => s.status !== 'delivered')
   const readOnly = task.status === 'completed' || task.status === 'cancelled'
 
-  async function sendUpstream(obstacle?: SemanticObstacle) {
-    const edgeId = obstacle?.edge_id || selectedEdgeId || bundle?.state?.current_edge_id || bundle?.state?.remaining_edge_ids[0]
-    if (!edgeId) { onError('请先在地图上选择一条道路'); return }
-    const percent = obstaclePercent.trim() === '' ? null : Number(obstaclePercent)
-    if (!obstacle && percent !== null && (!Number.isFinite(percent) || percent < 0 || percent > 100)) {
-      onError('障碍位置请填写 0 到 100，留空表示位置尚未确定'); return
-    }
-    setBusy(true)
-    try {
-      const names = { construction: '施工围挡，当前无法通过', pedestrian: '行人横穿，预计短暂占道', crowd: '道路行人密集，通行缓慢' }
-      const result = await api.semanticEvent({
-        event_id: newRequestId(), task_id: task.id,
-        obstacle_id: obstacle?.obstacle_id || `mock_${newRequestId()}`,
-        revision: (obstacle?.revision || 0) + 1, map_version: map.map_version,
-        source: 'mock_vision_llm', observed_at: new Date().toISOString(),
-        lifecycle: obstacle ? 'cleared' : 'observed', edge_id: edgeId,
-        edge_fraction: obstacle ? obstacle.edge_fraction : percent === null ? null : percent / 100,
-        category: obstacle?.category || upstreamKind,
-        passability: obstacle ? 'open' : upstreamKind === 'crowd' ? 'congested' : 'blocked',
-        confidence: 1, expected_duration_s: upstreamKind === 'pedestrian' ? 5 : 1800,
-        summary: obstacle ? '上游复查确认障碍已经解除' : names[upstreamKind],
-      })
-      onRefresh(result.bundle)
-      setUpstreamNotice(result.decision.reason)
-    } catch (err) {
-      onError(err instanceof ApiError ? err.message : '上游消息发送失败')
-    } finally { setBusy(false) }
+  async function configureUpstream(enabled: boolean, category = upstreamKind) {
+    return run(() => api.setRuntime(task.id, !!bundle?.runtime?.enabled, simSpeed, enabled, category))
   }
 
   async function run(work: () => Promise<Bundle>) {
@@ -178,8 +151,8 @@ export default function ExecutionPanel({
       onRefresh(refreshed)
       setCandidate(null)
       setCandidateNotice(null)
-      setReplanNotice('路况已更新。请点击“重新规划剩余站点”查看调整后的计划。')
-      if (task.mode === 'sim' && autoSim) {
+      setReplanNotice(bridgeEnabled && autoSim ? '人工路况已保存，后台调度会自动判断是否需要调整路线。' : '路况已更新。请点击“重新规划剩余站点”查看调整后的计划。')
+      if (task.mode === 'sim' && autoSim && !bridgeEnabled) {
         onToggleAuto(false)
       }
     } catch (err) {
@@ -362,31 +335,44 @@ export default function ExecutionPanel({
 
       {bridgeEnabled && task.mode === 'sim' && !readOnly && plan ? (
         <div className="exception-box">
-          <div className="exception-head"><strong>模拟上游语义消息</strong></div>
-          <p className="hint">模拟视觉与大语言模型已经分析完成的结果。行驶途中随时发送，系统立即结合当前位置处理。</p>
-          <label className="field"><span>道路</span>
-            <select className="input input-sm" value={selectedEdgeId || bundle.state?.current_edge_id || ''} onChange={(event) => onSelectEdge(event.target.value)}>
-              <option value="">请选择道路</option>
-              {map.edges.map((edge) => <option key={edge.id} value={edge.id}>{edge.name} · {edge.id}</option>)}
+          <div className="exception-head"><strong>上游语义接收与自动模拟</strong><span className="chip">自动决策</span></div>
+          <p className="hint">持续接收上游分析结果，收到后直接结合车辆位置决策，无需管理员确认。地图点击仅用于下方的人工上报。</p>
+          <label className="check-field">
+            <input type="checkbox" checked={!!bundle.upstream_simulation?.enabled} disabled={busy}
+              onChange={(event) => { void configureUpstream(event.target.checked) }} />
+            <span>启用自动上游模拟源</span>
+          </label>
+          <label className="field"><span>自动模拟场景</span>
+            <select className="input input-sm" value={bundle.upstream_simulation?.enabled ? bundle.upstream_simulation.category : upstreamKind}
+              disabled={busy || (!!bundle.upstream_simulation?.enabled && bundle.upstream_simulation.phase === 1)}
+              onChange={(event) => {
+                const category = event.target.value as typeof upstreamKind
+                setUpstreamKind(category)
+                if (bundle.upstream_simulation?.enabled) void configureUpstream(true, category)
+              }}>
+              <option value="pedestrian">行人横穿</option>
+              <option value="construction">施工围挡</option>
+              <option value="crowd">人群拥挤</option>
             </select>
           </label>
-          <label className="field"><span>上游理解的情况</span>
-            <select className="input input-sm" value={upstreamKind} onChange={(event) => setUpstreamKind(event.target.value as typeof upstreamKind)}>
-              <option value="construction">施工围挡：请求绕行</option>
-              <option value="pedestrian">行人横穿：先等待</option>
-              <option value="crowd">人群拥挤：比较路线成本</option>
-            </select>
-          </label>
-          <label className="field"><span>障碍距道路起点的位置（百分比，留空表示未知）</span>
-            <input className="input input-sm" type="number" min="0" max="100" value={obstaclePercent} onChange={(event) => setObstaclePercent(event.target.value)} />
-          </label>
-          <button className="btn btn-primary btn-block" onClick={() => { void sendUpstream() }} disabled={busy}>发送模拟语义消息</button>
-          {upstreamNotice ? <p className="candidate">调度结果：{upstreamNotice}</p> : null}
+          <p className="hint">模拟源会在行驶约 3 秒后自动选择车前方道路发送消息，再过约 3 秒自动发送复查解除消息。切换页面后仍继续工作。</p>
+          {bundle.upstream_simulation?.enabled ? <p className="candidate">模拟源状态：{
+            bundle.upstream_simulation.phase === 0 ? '等待行驶并自动观测' : bundle.upstream_simulation.phase === 1 ? '已发送障碍，等待上游自动复查' : '本轮消息已自动发送完成'
+          }</p> : <p className="hint">模拟源已关闭；外部上游消息接口仍在监听。</p>}
+          {bundle.upstream_simulation?.enabled && bundle.upstream_simulation.phase === 2 ? (
+            <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => { void run(async () => {
+              await api.setRuntime(task.id, !!bundle.runtime?.enabled, simSpeed, false)
+              return api.setRuntime(task.id, !!bundle.runtime?.enabled, simSpeed, true, upstreamKind)
+            }) }}>再运行一轮自动模拟</button>
+          ) : null}
+          {bundle.runtime?.hold_reason ? <p className="hint hint-strong">当前调度：{bundle.runtime.hold_reason}</p> : null}
           {(bundle.semantic_obstacles || []).map((obstacle) => (
             <div className="stop-item" key={obstacle.obstacle_id}>
-              <div className="stop-main"><strong>{obstacle.edge_id}</strong><p className="hint">{obstacle.summary}</p></div>
-              <button className="btn btn-mini" onClick={() => { void sendUpstream(obstacle) }} disabled={busy}>模拟解除</button>
+              <div className="stop-main"><strong>上游发现：{obstacle.edge_id}</strong><p className="hint">{obstacle.summary}</p></div>
             </div>
+          ))}
+          {bundle.agent_traces.filter((trace) => trace.action === 'observe_road_semantics').slice(-2).reverse().map((trace) => (
+            <p className="hint" key={trace.id}>{trace.input_summary} · {trace.output_summary}</p>
           ))}
         </div>
       ) : null}
@@ -394,7 +380,7 @@ export default function ExecutionPanel({
       {!readOnly ? (
         <div className="exception-box">
           <div className="exception-head">
-            <strong>上报道路异常</strong>
+            <strong>管理员人工上报道路异常</strong>
             <span className="chip">人工确认后生效</span>
           </div>
           <label className="field">

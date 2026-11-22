@@ -120,3 +120,5 @@ class SemanticEventRequest(BaseModel):
 class SimRuntimeRequest(BaseModel):
     enabled: bool
     speed_mps: float = Field(default=40, gt=0, le=1000)
+    auto_upstream: bool = False
+    upstream_category: Literal["pedestrian", "construction", "crowd"] = "pedestrian"

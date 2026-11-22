@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import time
+import uuid
 from contextlib import suppress
 from datetime import datetime, timezone
 from typing import Any
@@ -157,7 +158,7 @@ def receive(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 @service.serialized
-def set_runtime(task_id: str, enabled: bool, speed_mps: float) -> dict[str, Any]:
+def set_runtime(task_id: str, enabled: bool, speed_mps: float, auto_upstream: bool = False, upstream_category: str = "pedestrian") -> dict[str, Any]:
     require_enabled()
     with get_conn() as conn:
         task = service.get_bundle(task_id)["task"]
@@ -168,7 +169,68 @@ def set_runtime(task_id: str, enabled: bool, speed_mps: float) -> dict[str, Any]
                      (int(enabled), speed_mps, now_iso(), task_id))
         if not enabled:
             conn.execute("UPDATE sim_runtime SET auto_resume = 0 WHERE task_id = ?", (task_id,))
+        previous = service.upstream_public(conn, task_id)
+        # Changing speed or reopening the page must not restart an existing cycle.
+        if auto_upstream and (not previous["enabled"] or previous["category"] != upstream_category):
+            if previous["enabled"] and previous["phase"] == 1:
+                raise service.ApiError(409, "upstream_cycle_active", "当前模拟障碍尚未解除，请等待本轮结束后切换场景")
+            pending = conn.execute("SELECT payload, phase FROM upstream_simulations WHERE task_id = ?", (task_id,)).fetchone()
+            if pending and pending["phase"] == 1:
+                # Resume a stopped source without losing its outstanding obstacle.
+                conn.execute("UPDATE upstream_simulations SET enabled = 1 WHERE task_id = ?", (task_id,))
+            else:
+                conn.execute("INSERT INTO upstream_simulations (task_id, enabled, category) VALUES (?, 1, ?)"
+                             " ON CONFLICT(task_id) DO UPDATE SET enabled = 1, category = excluded.category, phase = 0, elapsed = 0, payload = '{}'",
+                             (task_id, upstream_category))
+        elif not auto_upstream:
+            if enabled or previous["configured"]:
+                conn.execute("INSERT OR IGNORE INTO upstream_simulations (task_id, category) VALUES (?, ?)", (task_id, upstream_category))
+            conn.execute("UPDATE upstream_simulations SET enabled = 0 WHERE task_id = ?", (task_id,))
         return service.get_bundle(task_id)
+
+
+def advance_upstream(conn, task_id: str, seconds: float) -> None:
+    """Independent timed source; never reads an administrator's selected road.
+
+    One cycle observes after 3 seconds of motion and sends a genuine simulated
+    re-observation/clear after another 3 seconds, including while the car waits.
+    Replacing this source with a real publisher leaves receive() unchanged.
+    """
+    row = conn.execute("SELECT * FROM upstream_simulations WHERE task_id = ? AND enabled = 1", (task_id,)).fetchone()
+    if not row or row["phase"] >= 2:
+        return
+    snapshot = service.get_bundle(task_id)
+    if snapshot["task"]["status"] in ("completed", "cancelled"):
+        conn.execute("UPDATE upstream_simulations SET enabled = 0 WHERE task_id = ?", (task_id,))
+        return
+    state = snapshot["state"]
+    if row["phase"] == 0 and (snapshot["task"]["status"] != "in_progress" or not state["current_edge_id"] or state["edge_progress"] <= 0):
+        return
+    elapsed = row["elapsed"] + seconds
+    if elapsed < 3:
+        conn.execute("UPDATE upstream_simulations SET elapsed = ? WHERE task_id = ?", (elapsed, task_id))
+        return
+    if row["phase"] == 0:
+        edge = load_map().edges[state["current_edge_id"]]
+        fraction = state["edge_progress"] + (1 - state["edge_progress"]) * 0.7
+        if state["last_node_id"] == edge["to"]:
+            fraction = 1 - fraction
+        category = row["category"]
+        summaries = {"pedestrian": "上游自动发现前方行人横穿", "construction": "上游自动发现前方施工围挡", "crowd": "上游自动发现前方人群拥挤"}
+        payload = SemanticEventRequest(
+            event_id=f"auto_{uuid.uuid4().hex}", task_id=task_id, obstacle_id=f"auto_{uuid.uuid4().hex}", revision=1,
+            map_version=snapshot["map_version"], edge_id=edge["id"], edge_fraction=fraction,
+            category=category, passability="congested" if category == "crowd" else "blocked",
+            confidence=1, expected_duration_s=5 if category == "pedestrian" else 1800,
+            summary=summaries[category], observed_at=datetime.now(timezone.utc),
+        ).model_dump(mode="json")
+    else:
+        payload = loads(row["payload"], {})
+        payload.update(event_id=f"auto_{uuid.uuid4().hex}", revision=2, lifecycle="cleared", passability="open",
+                       observed_at=now_iso(), summary="模拟上游复查确认障碍已解除")
+    receive(payload)
+    conn.execute("UPDATE upstream_simulations SET phase = ?, elapsed = 0, payload = ? WHERE task_id = ?",
+                 (row["phase"] + 1, dumps(payload), task_id))
 
 
 @service.serialized
@@ -177,18 +239,22 @@ def step_runtime(seconds: float) -> None:
     if not SEMANTIC_BRIDGE_ENABLED:
         return
     with get_conn() as conn:
-        rows = conn.execute("SELECT task_id FROM sim_runtime WHERE enabled = 1").fetchall()
+        rows = conn.execute("SELECT task_id FROM sim_runtime WHERE enabled = 1 UNION "
+                            "SELECT task_id FROM upstream_simulations WHERE enabled = 1 AND phase < 2").fetchall()
         for row in rows:
             task_id = row["task_id"]
             task = service.get_bundle(task_id)["task"]
             if task["status"] in ("completed", "cancelled"):
                 conn.execute("UPDATE sim_runtime SET enabled = 0 WHERE task_id = ?", (task_id,))
+                conn.execute("UPDATE upstream_simulations SET enabled = 0 WHERE task_id = ?", (task_id,))
                 continue
+            advance_upstream(conn, task_id, seconds)
             coordinate(conn, task_id)
             if service.get_bundle(task_id)["task"]["status"] != "in_progress":
                 continue
             runtime = service.runtime_public(conn, task_id)
-            service.sim_tick(task_id, seconds, runtime["speed_mps"], runtime=True)
+            if runtime["enabled"]:
+                service.sim_tick(task_id, seconds, runtime["speed_mps"], runtime=True)
 
 
 async def run_runtime() -> None:
@@ -216,4 +282,4 @@ def semantic_event(payload: SemanticEventRequest) -> dict[str, Any]:
 
 @router.post("/api/tasks/{task_id}/sim/runtime")
 def runtime_control(task_id: str, payload: SimRuntimeRequest) -> dict[str, Any]:
-    return set_runtime(task_id, payload.enabled, payload.speed_mps)
+    return set_runtime(task_id, payload.enabled, payload.speed_mps, payload.auto_upstream, payload.upstream_category)

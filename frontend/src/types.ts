@@ -245,6 +245,7 @@ export interface Bundle {
   sim?: { waiting: string | null; arrived_stop_ids: string[] }
   runtime?: SimRuntime
   semantic_obstacles?: SemanticObstacle[]
+  upstream_simulation?: { enabled: boolean; configured: boolean; category: 'pedestrian' | 'construction' | 'crowd'; phase: number; elapsed: number }
 }
 
 export interface TaskSummary {

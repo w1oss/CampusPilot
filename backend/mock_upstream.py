@@ -64,9 +64,11 @@ def main() -> None:
     parser.add_argument("--category", choices=["construction", "pedestrian", "crowd"], default="pedestrian")
     parser.add_argument("--edge-id", help="不填时，发送时读取车辆所在道路")
     parser.add_argument("--fraction", type=float, help="障碍位置，沿 edge.from 到 edge.to 的 0..1 比例；不填时取车前方")
-    parser.add_argument("--delay", type=float, default=3, help="等待多少秒发送，与路口位置无关")
-    parser.add_argument("--clear-after", type=float, default=3, help="发送后多少秒再发送解除消息")
+    parser.add_argument("--delay", type=float, default=0, help="等待多少秒发送；0 表示立即发送并先停车")
+    parser.add_argument("--clear-after", type=float, default=None, help="发送后多少秒再发送解除消息；0 表示保持到人工解除")
     args = parser.parse_args()
+    if args.clear_after is None:
+        args.clear_after = {"pedestrian": 3.0, "crowd": 30.0, "construction": 0.0}[args.category]
     if not args.demo and not args.task_id:
         parser.error("请指定 --task-id 或 --demo")
     if min(args.delay, args.clear_after) < 0 or (args.fraction is not None and not 0 <= args.fraction <= 1):
@@ -106,6 +108,9 @@ def main() -> None:
         "summary": descriptions[args.category]}
     for lifecycle in ("observed", "cleared"):
         if lifecycle == "cleared":
+            if args.clear_after <= 0:
+                print("长时间障碍保持中；需要解除时再次运行并指定 --clear-after 为正数", flush=True)
+                break
             time.sleep(args.clear_after)
             payload.update(event_id=uuid.uuid4().hex, revision=2, lifecycle="cleared", passability="open",
                            observed_at=datetime.now(timezone.utc).isoformat(), summary="上游复查确认障碍已解除")

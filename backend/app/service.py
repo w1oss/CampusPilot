@@ -100,8 +100,10 @@ def active_obstacles(conn, task_id: str) -> list[dict[str, Any]]:
 def runtime_public(conn, task_id: str) -> dict[str, Any]:
     row = conn.execute("SELECT * FROM sim_runtime WHERE task_id = ?", (task_id,)).fetchone()
     if not row:
-        return {"enabled": False, "speed_mps": SIM_SPEED_MPS, "hold_reason": "", "auto_resume": False, "waiting": None}
-    return {**dict(row), "enabled": bool(row["enabled"]) and SEMANTIC_BRIDGE_ENABLED, "auto_resume": bool(row["auto_resume"])}
+        return {"enabled": False, "speed_mps": SIM_SPEED_MPS, "hold_reason": "", "auto_resume": False,
+                "emergency_hold": False, "waiting": None}
+    return {**dict(row), "enabled": bool(row["enabled"]) and SEMANTIC_BRIDGE_ENABLED,
+            "auto_resume": bool(row["auto_resume"]), "emergency_hold": bool(row["emergency_hold"])}
 
 
 def upstream_public(conn, task_id: str) -> dict[str, Any]:
@@ -112,25 +114,39 @@ def upstream_public(conn, task_id: str) -> dict[str, Any]:
             "category": row["category"], "phase": row["phase"], "elapsed": row["elapsed"]}
 
 
-def route_hazards(conn, task_id: str) -> list[dict[str, Any]]:
+def remaining_route_edges(conn, task_id: str) -> tuple[dict[str, Any], list[str]] | None:
+    """Read-only view of the route the vehicle still has to drive."""
     state = _state_row(conn, task_id)
     if not state:
-        return []
+        return None
     remaining = loads(state["remaining_edge_ids"], [])
     current = state.get("current_edge_id")
     if current and (not remaining or remaining[0] != current):
         remaining.insert(0, current)
-    result = []
+    return state, remaining
+
+
+def hazard_affects_route(conn, task_id: str, obstacle: dict[str, Any]) -> bool:
+    """Whether an observed hazard can still affect forward motion."""
+    context = remaining_route_edges(conn, task_id)
+    if context is None:
+        return False
+    state, remaining = context
+    edge_id = obstacle["edge_id"]
+    if edge_id not in remaining:
+        return False
+    if edge_id == state.get("current_edge_id") and edge_id not in remaining[1:]:
+        return obstacle_ahead(obstacle, load_map().edges[edge_id], state["last_node_id"], state["edge_progress"])
+    return True
+
+
+def route_hazards(conn, task_id: str) -> list[dict[str, Any]]:
+    context = remaining_route_edges(conn, task_id)
+    if context is None:
+        return []
+    _state, remaining = context
     mapdata = load_map()
-    for obstacle in active_obstacles(conn, task_id):
-        edge_id = obstacle["edge_id"]
-        if edge_id not in remaining:
-            continue
-        if edge_id == current and edge_id not in remaining[1:] and not obstacle_ahead(
-            obstacle, mapdata.edges[edge_id], state["last_node_id"], state["edge_progress"]
-        ):
-            continue
-        result.append(obstacle)
+    result = [obstacle for obstacle in active_obstacles(conn, task_id) if hazard_affects_route(conn, task_id, obstacle)]
     baseline = get_road_status(conn)
     for edge_id in set(remaining):
         status = baseline.get(edge_id, mapdata.edges[edge_id].get("base_status", "open"))
@@ -597,7 +613,10 @@ def perform_action(task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         stops = _stop_rows(conn, task_id)
 
         if action in ("pause", "resume", "start", "cancel", "complete"):
-            conn.execute("UPDATE sim_runtime SET auto_resume = 0, hold_reason = '' WHERE task_id = ?", (task_id,))
+            conn.execute(
+                "UPDATE sim_runtime SET auto_resume = 0, emergency_hold = 0, hold_reason = '' WHERE task_id = ?",
+                (task_id,),
+            )
 
         if action == "start":
             if task["status"] not in ("ready", "paused"):

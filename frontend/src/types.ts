@@ -175,6 +175,7 @@ export interface SimRuntime {
   speed_mps: number
   hold_reason: string
   auto_resume: boolean
+  emergency_hold?: boolean
   waiting: string | null
 }
 

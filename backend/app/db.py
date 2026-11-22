@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS sim_runtime (
     speed_mps REAL NOT NULL DEFAULT 40,
     hold_reason TEXT NOT NULL DEFAULT '',
     auto_resume INTEGER NOT NULL DEFAULT 0,
+    emergency_hold INTEGER NOT NULL DEFAULT 0,
     decision_key TEXT NOT NULL DEFAULT '',
     waiting TEXT,
     updated_at TEXT NOT NULL
@@ -203,6 +204,9 @@ def get_conn() -> Iterator[sqlite3.Connection]:
 def init_db() -> None:
     with get_conn() as conn:
         conn.executescript(SCHEMA)
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(sim_runtime)").fetchall()}
+        if "emergency_hold" not in columns:
+            conn.execute("ALTER TABLE sim_runtime ADD COLUMN emergency_hold INTEGER NOT NULL DEFAULT 0")
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:

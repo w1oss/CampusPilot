@@ -16,7 +16,15 @@ from typing import Any
 from fastapi import APIRouter
 
 from . import agents, service
-from .config import SEMANTIC_BRIDGE_ENABLED, SEMANTIC_MAX_AGE_SECONDS, SIM_SPEED_MPS, SIM_TICK_INTERVAL
+from .config import (
+    SEMANTIC_BRIDGE_ENABLED,
+    SEMANTIC_MAX_AGE_SECONDS,
+    SIM_SPEED_MPS,
+    SIM_TICK_INTERVAL,
+    SIM_UPSTREAM_CLEAR_SECONDS,
+    SIM_UPSTREAM_DELAY_SECONDS,
+    SIM_UPSTREAM_EXPECTED_SECONDS,
+)
 from .db import dumps, get_conn, loads, now_iso
 from .mapdata import load_map
 from .schemas import SemanticEventRequest, SimRuntimeRequest
@@ -24,10 +32,61 @@ from .schemas import SemanticEventRequest, SimRuntimeRequest
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+STATUS_RANK = {"open": 0, "congested": 1, "blocked": 2}
+HOLD_REASON = "收到影响行驶的危险消息，已紧急停车，等待分析与放行"
+
 
 def require_enabled() -> None:
     if not SEMANTIC_BRIDGE_ENABLED:
         raise service.ApiError(503, "bridge_disabled", "实时语义接入模块未启用")
+
+
+def normalized_status(observation: dict[str, Any]) -> str:
+    return "blocked" if observation.get("effective_status") == "unknown" else observation.get("effective_status", "unknown")
+
+
+def should_stop(conn, task_id: str, observation: dict[str, Any]) -> bool:
+    """Fast safety gate: only the road state matters here, not route planning."""
+    if observation.get("lifecycle") == "cleared" or normalized_status(observation) == "open":
+        return False
+    task = conn.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    if not task or task["status"] != "in_progress":
+        return False
+    if not service.hazard_affects_route(conn, task_id, observation):
+        return False
+    mapdata = load_map()
+    edge_id = observation["edge_id"]
+    base = mapdata.edges[edge_id].get("base_status", "open")
+    current = service.get_road_status(conn, task_id).get(edge_id, base)
+    return STATUS_RANK.get(normalized_status(observation), 0) > STATUS_RANK.get(current, 0)
+
+
+def emergency_stop(conn, task_id: str, observation: dict[str, Any]) -> bool:
+    """Step 1: persist the stop before any interpretation or planning runs."""
+    if not should_stop(conn, task_id, observation):
+        return False
+    task = conn.execute("SELECT plan_version FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    service.apply_dispatch_status(task_id, "paused")
+    ensure_runtime(conn, task_id)
+    conn.execute(
+        "UPDATE sim_runtime SET emergency_hold = 1, auto_resume = 1, hold_reason = ?, waiting = 'road_blocked',"
+        " updated_at = ? WHERE task_id = ?",
+        (HOLD_REASON, now_iso(), task_id),
+    )
+    service.add_event(
+        conn,
+        task_id,
+        "safety_stop",
+        {
+            "obstacle_id": observation.get("obstacle_id"),
+            "edge_id": observation.get("edge_id"),
+            "status": normalized_status(observation),
+            "summary": observation.get("summary", ""),
+            "reason": HOLD_REASON,
+        },
+        int(task["plan_version"]) if task and task["plan_version"] else None,
+    )
+    return True
 
 
 def ensure_runtime(conn, task_id: str) -> None:
@@ -75,21 +134,35 @@ def coordinate(conn, task_id: str) -> dict[str, Any]:
     if action == "wait":
         if was_running:
             service.apply_dispatch_status(task_id, "paused")
-        conn.execute("UPDATE sim_runtime SET hold_reason = ?, auto_resume = ?, waiting = 'road_blocked' WHERE task_id = ?",
-                     (decision["reason"], int(may_resume), task_id))
+        conn.execute(
+            "UPDATE sim_runtime SET hold_reason = ?, auto_resume = ?, emergency_hold = 1, waiting = 'road_blocked'"
+            " WHERE task_id = ?",
+            (decision["reason"], int(may_resume), task_id),
+        )
     elif action == "replan":
         result = service.replan(task_id, decision["reason"], plan_version=snapshot["task"]["plan_version"])
         if result["plan"]["feasible"]:
             if may_resume:
                 service.apply_dispatch_status(task_id, "in_progress")
-            conn.execute("UPDATE sim_runtime SET hold_reason = '', auto_resume = 0, waiting = NULL WHERE task_id = ?", (task_id,))
+            conn.execute(
+                "UPDATE sim_runtime SET hold_reason = '', auto_resume = 0, emergency_hold = 0, waiting = NULL"
+                " WHERE task_id = ?",
+                (task_id,),
+            )
         else:
-            conn.execute("UPDATE sim_runtime SET hold_reason = ?, auto_resume = ?, waiting = 'road_blocked' WHERE task_id = ?",
-                         ("剩余任务不可达，等待障碍解除或人工处理", int(may_resume), task_id))
+            conn.execute(
+                "UPDATE sim_runtime SET hold_reason = ?, auto_resume = ?, emergency_hold = 1, waiting = 'road_blocked'"
+                " WHERE task_id = ?",
+                ("剩余任务不可达，等待障碍解除或人工处理", int(may_resume), task_id),
+            )
     elif action == "continue" and runtime["hold_reason"]:
         if runtime["auto_resume"] and snapshot["task"]["status"] == "paused":
             service.apply_dispatch_status(task_id, "in_progress")
-        conn.execute("UPDATE sim_runtime SET hold_reason = '', auto_resume = 0, waiting = NULL WHERE task_id = ?", (task_id,))
+        conn.execute(
+            "UPDATE sim_runtime SET hold_reason = '', auto_resume = 0, emergency_hold = 0, waiting = NULL"
+            " WHERE task_id = ?",
+            (task_id,),
+        )
 
     fresh = service.get_bundle(task_id)
     conn.execute("UPDATE sim_runtime SET decision_key = ?, updated_at = ? WHERE task_id = ?",
@@ -102,10 +175,13 @@ def coordinate(conn, task_id: str) -> dict[str, Any]:
 
 
 @service.serialized
-def receive(payload: dict[str, Any]) -> dict[str, Any]:
+def ingest(payload: dict[str, Any]) -> dict[str, Any]:
+    """Step 1 transaction: validate, stop the vehicle, then persist the hazard.
+
+    The wire payload is retained separately from normalized timestamps, allowing
+    exact retries even when observed_at was omitted by the sender.
+    """
     require_enabled()
-    # The wire payload is retained separately from normalized timestamps, allowing
-    # exact retries even when observed_at was omitted by the sender.
     wire = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     task_id, event_id = payload["task_id"], payload["event_id"]
     with get_conn() as conn:
@@ -113,7 +189,9 @@ def receive(payload: dict[str, Any]) -> dict[str, Any]:
         if previous:
             if previous["payload"] != wire:
                 raise service.ApiError(409, "event_id_conflict", "同一事件编号不能用于不同内容")
-            return {**loads(previous["response"], {}), "duplicate": True, "bundle": service.get_bundle(task_id)}
+            stored = loads(previous["response"], {})
+            return {"task_id": task_id, "event_id": event_id, "accepted": bool(stored.get("accepted")),
+                    "duplicate": True, "response": stored, "stopped": False}
         task = service.get_bundle(task_id)["task"]
         if task["mode"] != "sim":
             raise service.ApiError(409, "simulation_only", "此接入模块仅作用于指定模拟任务，不修改真实配送")
@@ -140,7 +218,9 @@ def receive(payload: dict[str, Any]) -> dict[str, Any]:
         weak_update = old and old["active"] and payload["confidence"] < 0.65
         if weak_clear or weak_update:
             accepted = False
+        stopped = False
         if accepted:
+            stopped = emergency_stop(conn, task_id, observation)
             conn.execute(
                 "INSERT INTO semantic_obstacles VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(task_id, obstacle_id) DO UPDATE SET"
                 " revision = excluded.revision, observed_at = excluded.observed_at, active = excluded.active, payload = excluded.payload",
@@ -148,13 +228,37 @@ def receive(payload: dict[str, Any]) -> dict[str, Any]:
             )
         agents.record(conn, "road_observer", "observe_road_semantics", task_id=task_id,
                       input_summary=f"{event_id}：{payload['summary']}",
-                      output_summary=f"道路={payload['edge_id']}；通行={observation['effective_status']}；{'已接纳' if accepted else '忽略旧消息或等待复核'}；结构化适配",
+                      output_summary=f"道路={payload['edge_id']}；通行={observation['effective_status']}；{'已接纳' if accepted else '忽略旧消息或等待复核'}；结构化适配；{'已紧急停车' if stopped else '无需停车'}",
                       tools=["classify_hazard"])
-        decision = coordinate(conn, task_id) if accepted else {"action": "ignored", "reason": "过期/乱序消息或解除证据不足，保留当前环境状态"}
-        response = {"event_id": event_id, "accepted": bool(accepted), "duplicate": False, "decision": decision}
+        response = {"event_id": event_id, "accepted": bool(accepted), "duplicate": False, "stopped": stopped}
         conn.execute("INSERT INTO semantic_events VALUES (?, ?, ?, ?, ?)", (event_id, task_id, wire, dumps(response), now_iso()))
-        service.add_event(conn, task_id, "semantic_event", {"event_id": event_id, "accepted": bool(accepted), "source": payload["source"]})
-        return {**response, "bundle": service.get_bundle(task_id)}
+        service.add_event(conn, task_id, "semantic_event", {"event_id": event_id, "accepted": bool(accepted),
+                                                           "stopped": stopped, "source": payload["source"]})
+        return {"task_id": task_id, "event_id": event_id, "accepted": bool(accepted),
+                "duplicate": False, "response": response, "stopped": stopped}
+
+
+@service.serialized
+def resolve(task_id: str) -> dict[str, Any]:
+    """Step 2 transaction: analyze the hazard, plan, and release only if feasible."""
+    with get_conn() as conn:
+        return coordinate(conn, task_id)
+
+
+def receive(payload: dict[str, Any]) -> dict[str, Any]:
+    """Two explicit steps: stop first (committed), decide and release afterwards.
+
+    ingest() commits the stop on its own transaction, so a slow or failed decision
+    can never roll the vehicle back into motion. resolve() then analyzes and plans.
+    """
+    result = ingest(payload)
+    task_id = result["task_id"]
+    if result["accepted"]:
+        decision = resolve(task_id)
+    else:
+        decision = {"action": "ignored", "reason": "过期/乱序消息或解除证据不足，保留当前环境状态"}
+    return {**result["response"], "duplicate": bool(result.get("duplicate")), "decision": decision,
+            "bundle": service.get_bundle(task_id)}
 
 
 @service.serialized
@@ -189,30 +293,33 @@ def set_runtime(task_id: str, enabled: bool, speed_mps: float, auto_upstream: bo
         return service.get_bundle(task_id)
 
 
-def advance_upstream(conn, task_id: str, seconds: float) -> None:
-    """Independent timed source; never reads an administrator's selected road.
+def advance_upstream(conn, task_id: str, seconds: float) -> dict[str, Any] | None:
+    """Independent timed source; returns the message to deliver after commit.
 
-    One cycle observes after 3 seconds of motion and sends a genuine simulated
-    re-observation/clear after another 3 seconds, including while the car waits.
-    Replacing this source with a real publisher leaves receive() unchanged.
+    The first hazard is published as soon as the source is enabled (delay 0), so
+    the vehicle stops before any route planning runs. Clearing is category-aware:
+    pedestrians clear quickly, crowds wait longer, construction stays until a
+    human confirms removal. Replacing this source with a real publisher leaves
+    receive() unchanged.
     """
     row = conn.execute("SELECT * FROM upstream_simulations WHERE task_id = ? AND enabled = 1", (task_id,)).fetchone()
     if not row or row["phase"] >= 2:
-        return
+        return None
     snapshot = service.get_bundle(task_id)
     if snapshot["task"]["status"] in ("completed", "cancelled"):
         conn.execute("UPDATE upstream_simulations SET enabled = 0 WHERE task_id = ?", (task_id,))
-        return
+        return None
     state = snapshot["state"]
-    if row["phase"] == 0 and (snapshot["task"]["status"] != "in_progress" or not state["current_edge_id"] or state["edge_progress"] <= 0):
-        return
+    if row["phase"] == 0 and (snapshot["task"]["status"] != "in_progress" or not state["current_edge_id"]):
+        return None
     elapsed = row["elapsed"] + seconds
-    if elapsed < 3:
-        conn.execute("UPDATE upstream_simulations SET elapsed = ? WHERE task_id = ?", (elapsed, task_id))
-        return
     if row["phase"] == 0:
+        if elapsed < SIM_UPSTREAM_DELAY_SECONDS:
+            conn.execute("UPDATE upstream_simulations SET elapsed = ? WHERE task_id = ?", (elapsed, task_id))
+            return None
         edge = load_map().edges[state["current_edge_id"]]
-        fraction = state["edge_progress"] + (1 - state["edge_progress"]) * 0.7
+        progress = float(state["edge_progress"] or 0)
+        fraction = progress + (1 - progress) * 0.7
         if state["last_node_id"] == edge["to"]:
             fraction = 1 - fraction
         category = row["category"]
@@ -221,23 +328,54 @@ def advance_upstream(conn, task_id: str, seconds: float) -> None:
             event_id=f"auto_{uuid.uuid4().hex}", task_id=task_id, obstacle_id=f"auto_{uuid.uuid4().hex}", revision=1,
             map_version=snapshot["map_version"], edge_id=edge["id"], edge_fraction=fraction,
             category=category, passability="congested" if category == "crowd" else "blocked",
-            confidence=1, expected_duration_s=5 if category == "pedestrian" else 1800,
+            confidence=1, expected_duration_s=SIM_UPSTREAM_EXPECTED_SECONDS.get(category, 1800.0),
             summary=summaries[category], observed_at=datetime.now(timezone.utc),
         ).model_dump(mode="json")
     else:
+        clear_after = SIM_UPSTREAM_CLEAR_SECONDS.get(row["category"], 0.0)
+        if clear_after <= 0 or elapsed < clear_after:
+            conn.execute("UPDATE upstream_simulations SET elapsed = ? WHERE task_id = ?", (elapsed, task_id))
+            return None
         payload = loads(row["payload"], {})
-        payload.update(event_id=f"auto_{uuid.uuid4().hex}", revision=2, lifecycle="cleared", passability="open",
-                       observed_at=now_iso(), summary="模拟上游复查确认障碍已解除")
-    receive(payload)
+        payload.update(event_id=f"auto_{uuid.uuid4().hex}", revision=int(payload.get("revision", 1)) + 1,
+                       lifecycle="cleared", passability="open", observed_at=now_iso(),
+                       summary="模拟上游复查确认障碍已解除")
     conn.execute("UPDATE upstream_simulations SET phase = ?, elapsed = 0, payload = ? WHERE task_id = ?",
                  (row["phase"] + 1, dumps(payload), task_id))
+    return payload
 
 
 @service.serialized
-def step_runtime(seconds: float) -> None:
-    """One bounded real-time step; no browser and no waypoint-based polling."""
-    if not SEMANTIC_BRIDGE_ENABLED:
-        return
+def mark_upstream_cleared(task_id: str) -> dict[str, Any]:
+    """Human-confirmed clear for long-lived hazards such as construction."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM upstream_simulations WHERE task_id = ?", (task_id,)).fetchone()
+        if not row or row["phase"] != 1:
+            raise service.ApiError(409, "no_upstream_obstacle", "当前没有等待解除的模拟障碍")
+        payload = loads(row["payload"], {})
+        payload.update(
+            event_id=f"auto_{uuid.uuid4().hex}",
+            revision=int(payload.get("revision", 1)) + 1,
+            lifecycle="cleared",
+            passability="open",
+            observed_at=now_iso(),
+            summary="人工确认模拟障碍已解除",
+        )
+        conn.execute("UPDATE upstream_simulations SET phase = 2, elapsed = 0, payload = ? WHERE task_id = ?",
+                     (dumps(payload), task_id))
+    return payload
+
+
+def clear_upstream(task_id: str) -> dict[str, Any]:
+    """Commit the clear message first, then run the regular two-step decision."""
+    payload = mark_upstream_cleared(task_id)
+    return receive(payload)
+
+
+@service.serialized
+def trigger_upstream(seconds: float) -> list[dict[str, Any]]:
+    """Commit the source timing first, then deliver messages in their own transactions."""
+    pending: list[dict[str, Any]] = []
     with get_conn() as conn:
         rows = conn.execute("SELECT task_id FROM sim_runtime WHERE enabled = 1 UNION "
                             "SELECT task_id FROM upstream_simulations WHERE enabled = 1 AND phase < 2").fetchall()
@@ -248,13 +386,42 @@ def step_runtime(seconds: float) -> None:
                 conn.execute("UPDATE sim_runtime SET enabled = 0 WHERE task_id = ?", (task_id,))
                 conn.execute("UPDATE upstream_simulations SET enabled = 0 WHERE task_id = ?", (task_id,))
                 continue
-            advance_upstream(conn, task_id, seconds)
+            payload = advance_upstream(conn, task_id, seconds)
+            if payload:
+                pending.append(payload)
+    return pending
+
+
+@service.serialized
+def move_runtime(seconds: float) -> None:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT task_id FROM sim_runtime WHERE enabled = 1 UNION "
+                            "SELECT task_id FROM upstream_simulations WHERE enabled = 1 AND phase < 2").fetchall()
+        for row in rows:
+            task_id = row["task_id"]
+            task = service.get_bundle(task_id)["task"]
+            if task["status"] in ("completed", "cancelled"):
+                conn.execute("UPDATE sim_runtime SET enabled = 0 WHERE task_id = ?", (task_id,))
+                conn.execute("UPDATE upstream_simulations SET enabled = 0 WHERE task_id = ?", (task_id,))
+                continue
             coordinate(conn, task_id)
             if service.get_bundle(task_id)["task"]["status"] != "in_progress":
                 continue
             runtime = service.runtime_public(conn, task_id)
             if runtime["enabled"]:
                 service.sim_tick(task_id, seconds, runtime["speed_mps"], runtime=True)
+
+
+def step_runtime(seconds: float) -> None:
+    """One bounded real-time step: stop first, decide next, move only if released."""
+    if not SEMANTIC_BRIDGE_ENABLED:
+        return
+    for payload in trigger_upstream(seconds):
+        try:
+            receive(payload)
+        except Exception:
+            logger.exception("Vehicle remains stopped: upstream decision failed")
+    move_runtime(seconds)
 
 
 async def run_runtime() -> None:
@@ -283,3 +450,7 @@ def semantic_event(payload: SemanticEventRequest) -> dict[str, Any]:
 @router.post("/api/tasks/{task_id}/sim/runtime")
 def runtime_control(task_id: str, payload: SimRuntimeRequest) -> dict[str, Any]:
     return set_runtime(task_id, payload.enabled, payload.speed_mps, payload.auto_upstream, payload.upstream_category)
+
+@router.post("/api/tasks/{task_id}/sim/upstream/clear")
+def upstream_clear(task_id: str) -> dict[str, Any]:
+    return clear_upstream(task_id)

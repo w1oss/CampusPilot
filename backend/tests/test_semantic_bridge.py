@@ -177,21 +177,35 @@ def test_untrusted_clear_cannot_remove_confirmed_obstacle():
     assert result["bundle"]["task"]["status"] == "paused"
 
 
-def test_transaction_rolls_back_and_identical_event_can_retry(monkeypatch):
+def test_stop_is_committed_before_decision_and_survives_planner_failure(monkeypatch):
     task_id = driving_task()
     payload = event(task_id)
     original = service.replan
+    seen = []
+
     def fail(*args, **kwargs):
+        seen.append(service.get_bundle(task_id)["runtime"]["emergency_hold"])
         raise RuntimeError("planner unavailable")
+
     monkeypatch.setattr(service, "replan", fail)
     with pytest.raises(RuntimeError):
         bridge.receive(payload)
+    assert seen == [True]
+    stopped = service.get_bundle(task_id)
+    assert stopped["task"]["status"] == "paused"
+    assert stopped["runtime"]["emergency_hold"] is True
+    assert stopped["runtime"]["auto_resume"] is True
+    assert stopped["state"]["position"] == {"x": 40, "y": 0}
     with db.get_conn() as conn:
-        assert conn.execute("SELECT COUNT(*) FROM semantic_events").fetchone()[0] == 0
-        assert conn.execute("SELECT COUNT(*) FROM semantic_obstacles").fetchone()[0] == 0
-    assert service.get_bundle(task_id)["task"]["plan_version"] == 1
+        assert conn.execute("SELECT COUNT(*) FROM semantic_events").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM semantic_obstacles").fetchone()[0] == 1
+    assert stopped["task"]["plan_version"] == 1
     monkeypatch.setattr(service, "replan", original)
-    assert bridge.receive(payload)["accepted"] is True
+    recovered = bridge.receive(payload)
+    assert recovered["duplicate"] is True
+    assert recovered["accepted"] is True
+    assert recovered["bundle"]["task"]["status"] == "in_progress"
+    assert recovered["bundle"]["runtime"]["emergency_hold"] is False
 
 
 def test_backend_moves_without_browser_and_receives_mid_motion_messages():
@@ -342,3 +356,29 @@ def test_changing_speed_before_first_start_keeps_default_source_unconfigured():
     assert service.get_bundle(task_id)["upstream_simulation"]["configured"] is False
     bridge.set_runtime(task_id, True, 5, True)
     assert service.get_bundle(task_id)["upstream_simulation"]["enabled"] is True
+
+def test_source_stops_the_vehicle_immediately_when_enabled():
+    task_id = driving_task()
+    bridge.set_runtime(task_id, True, 10, True, "pedestrian")
+    bridge.step_runtime(0.1)
+    bundle = service.get_bundle(task_id)
+    assert bundle["task"]["status"] == "paused"
+    assert bundle["runtime"]["emergency_hold"] is True
+    assert bundle["semantic_obstacles"]
+    assert bundle["state"]["position"] == {"x": 40, "y": 0}
+
+
+def test_construction_stays_active_until_manual_clear():
+    task_id = driving_task()
+    bridge.set_runtime(task_id, True, 10, True, "construction")
+    bridge.step_runtime(3)
+    started = service.get_bundle(task_id)
+    assert started["upstream_simulation"]["phase"] == 1
+    assert started["semantic_obstacles"] and started["semantic_obstacles"][0]["active"]
+    bridge.step_runtime(600)
+    held = service.get_bundle(task_id)
+    assert held["upstream_simulation"]["phase"] == 1
+    assert held["semantic_obstacles"] and held["semantic_obstacles"][0]["active"]
+    cleared = bridge.clear_upstream(task_id)
+    assert cleared["bundle"]["upstream_simulation"]["phase"] == 2
+    assert cleared["bundle"]["semantic_obstacles"] == []

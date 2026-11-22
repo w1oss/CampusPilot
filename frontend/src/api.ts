@@ -74,6 +74,10 @@ export const api = {
     }),
   setRuntime: (id: string, enabled: boolean, speedMps: number, autoUpstream = false, upstreamCategory = 'pedestrian') =>
     request<Bundle>(`/api/tasks/${id}/sim/runtime`, { method: 'POST', body: JSON.stringify({ enabled, speed_mps: speedMps, auto_upstream: autoUpstream, upstream_category: upstreamCategory }) }),
+  clearUpstream: (id: string) =>
+    request<{ accepted: boolean; duplicate: boolean; decision: { action: string; reason: string }; bundle: Bundle }>(
+      `/api/tasks/${id}/sim/upstream/clear`, { method: 'POST' },
+    ),
   semanticEvent: (payload: SemanticEvent) =>
     request<{ accepted: boolean; duplicate: boolean; decision: { action: string; reason: string }; bundle: Bundle }>(
       '/api/semantic-events', { method: 'POST', body: JSON.stringify(payload) },

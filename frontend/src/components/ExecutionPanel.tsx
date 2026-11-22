@@ -92,6 +92,10 @@ export default function ExecutionPanel({
     return run(() => api.setRuntime(task.id, !!bundle?.runtime?.enabled, simSpeed, enabled, category))
   }
 
+  async function clearUpstreamObstacle() {
+    await run(async () => (await api.clearUpstream(task.id)).bundle)
+  }
+
   async function run(work: () => Promise<Bundle>) {
     setBusy(true)
     try {
@@ -355,10 +359,21 @@ export default function ExecutionPanel({
               <option value="crowd">人群拥挤</option>
             </select>
           </label>
-          <p className="hint">模拟源会在行驶约 3 秒后自动选择车前方道路发送消息，再过约 3 秒自动发送复查解除消息。切换页面后仍继续工作。</p>
+          <p className="hint">启用后立即按车辆当前位置发送第一条障碍消息，先停车再计算路线；行人约 3 秒、人群约 30 秒自动解除，施工围挡保持到人工解除。切换页面后仍继续工作。</p>
           {bundle.upstream_simulation?.enabled ? <p className="candidate">模拟源状态：{
-            bundle.upstream_simulation.phase === 0 ? '等待行驶并自动观测' : bundle.upstream_simulation.phase === 1 ? '已发送障碍，等待上游自动复查' : '本轮消息已自动发送完成'
+            bundle.upstream_simulation.phase === 0
+              ? '等待车辆开始行驶，随后立即观测'
+              : bundle.upstream_simulation.phase === 1
+                ? bundle.upstream_simulation.category === 'construction'
+                  ? '施工围挡保持中，需人工解除'
+                  : '已发送障碍，等待上游自动复查解除'
+                : '本轮消息已自动发送完成'
           }</p> : <p className="hint">模拟源已关闭；外部上游消息接口仍在监听。</p>}
+          {bundle.upstream_simulation?.enabled && bundle.upstream_simulation.phase === 1 ? (
+            <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => { void clearUpstreamObstacle() }}>
+              解除当前模拟障碍
+            </button>
+          ) : null}
           {bundle.upstream_simulation?.enabled && bundle.upstream_simulation.phase === 2 ? (
             <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => { void run(async () => {
               await api.setRuntime(task.id, !!bundle.runtime?.enabled, simSpeed, false)

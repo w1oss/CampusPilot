@@ -95,12 +95,33 @@ def _edge_distance(mapdata, edge: dict[str, Any], x: float, y: float, fraction: 
     )
 
 
+def visible_road_directions(mapdata, state) -> set[str]:
+    """See every road incident to a nearby connection, including closed roads.
+
+    Connections can be crosses, T/Y junctions or bends. Neither road count,
+    node kind nor travel permission determines which directions can be observed.
+    Only connections on the current road (or the stopped-at node) qualify;
+    visibility never propagates through another connection.
+    """
+    if not state or state["position_x"] is None or state["position_y"] is None:
+        return set()
+    current = mapdata.edges.get(state["current_edge_id"])
+    candidates = {current["from"], current["to"]} if current else {state["last_node_id"]}
+    nearby = {
+        node_id for node_id in candidates if node_id in mapdata.nodes
+        and math.hypot(mapdata.nodes[node_id]["x"] - float(state["position_x"]),
+                       mapdata.nodes[node_id]["y"] - float(state["position_y"]))
+        * METER_PER_PIXEL <= OBSERVE_RADIUS_M
+    }
+    return {edge_id for edge_id, edge in mapdata.edges.items()
+            if edge["from"] in nearby or edge["to"] in nearby}
+
+
 def observable(mapdata, state, edge_id: str, fraction: float | None, category: str = "other") -> bool:
     """Simple demo visibility, not a camera/occlusion model.
 
-    Within 20 m of a junction, construction/barriers on its incident edges are
-    visible over the entire segment, regardless of length. Never recurse beyond
-    that junction. Boxes need their original position inside a 10 m radius.
+    Near any road connection, construction/barriers in all connected directions
+    are visible over the entire segment. Boxes retain a 10 m local radius.
     """
     if not state or state["position_x"] is None:
         return False
@@ -110,11 +131,8 @@ def observable(mapdata, state, edge_id: str, fraction: float | None, category: s
         return False
     x, y = float(state["position_x"]), float(state["position_y"])
     current = mapdata.edges.get(current_id) if current_id else None
-    if category in ("construction", "barrier"):
-        candidates = ({current["from"], current["to"]} if current else {state["last_node_id"]}) & {edge["from"], edge["to"]}
-        if any(math.hypot(mapdata.nodes[node]["x"] - x, mapdata.nodes[node]["y"] - y)
-               * METER_PER_PIXEL <= OBSERVE_RADIUS_M for node in candidates):
-            return True
+    if category in ("construction", "barrier") and edge_id in visible_road_directions(mapdata, state):
+        return True
     if current_id and current_id != edge_id:
         if current is None or not ({current["from"], current["to"]} & {edge["from"], edge["to"]}):
             return False

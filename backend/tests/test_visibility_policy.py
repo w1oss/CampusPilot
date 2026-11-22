@@ -5,14 +5,14 @@ from pathlib import Path
 import pytest
 
 from app.mapdata import MapData
-from app.scene_sim import observable
+from app.scene_sim import observable, visible_road_directions
 from app.simulator import advance, local_box_position
 
 
-def crossroads():
+def crossroads(roads=None):
     nodes = [{"id": "centre", "x": 1500, "y": 1500, "kind": "waypoint"}]
     edges = []
-    for name, x, y in [("n", 1500, 500), ("s", 1500, 2500), ("w", 500, 1500), ("e", 2500, 1500)]:
+    for name, x, y in (roads or [("n", 1500, 500), ("s", 1500, 2500), ("w", 500, 1500), ("e", 2500, 1500)]):
         nodes.append({"id": name, "x": x, "y": y})
         edges.append({"id": name, "from": "centre", "to": name, "distance_m": 280,
                       "polyline": [[1500, 1500], [x, y]], "base_status": "open"})
@@ -43,6 +43,38 @@ def test_box_has_ten_metre_radius_even_at_junction():
     assert observable(data, state, "e", 9.9 / 280, "box")
     assert not observable(data, state, "e", 10.1 / 280, "box")
     assert not observable(data, state, "e", 0.95, "box")
+
+
+@pytest.mark.parametrize("roads", [
+    [("n", 1500, 500), ("w", 500, 1500), ("e", 2500, 1500)],
+    [("n", 1500, 500), ("sw", 650, 2350), ("se", 2350, 2350)],
+    [("n", 1500, 500), ("e", 2500, 1500)],
+], ids=["T-junction", "Y-junction", "bend"])
+@pytest.mark.parametrize("category", ["construction", "barrier"])
+def test_all_connected_directions_are_visible_for_any_connection_shape(roads, category):
+    data = crossroads(roads)
+    # A waypoint label is sufficient; no special junction tag is required.
+    state = {"position_x": 1500, "position_y": 1490, "current_edge_id": "n", "last_node_id": "n"}
+    expected = {name for name, _, _ in roads}
+    # One-way/closed roads are still observable, allowing recovery checks.
+    data.edges[roads[-1][0]].update(base_status="blocked", bidirectional=False)
+    assert visible_road_directions(data, state) == expected
+    for edge_id in expected:
+        assert observable(data, state, edge_id, 0.95, category)
+        assert not observable(data, state, edge_id, 0.95, "box")
+    assert not observable(data, state, "parallel", 0.5, category)
+    state.update(current_edge_id=None, last_node_id="centre", position_y=1500)
+    assert visible_road_directions(data, state) == expected
+
+
+def test_visibility_does_not_extend_through_the_next_connection():
+    data = crossroads()
+    data.nodes["beyond"] = {"id": "beyond", "x": 2500, "y": 2500}
+    data.edges["second_connection"] = {"id": "second_connection", "from": "e", "to": "beyond",
+                                       "distance_m": 280, "polyline": [[2500, 1500], [2500, 2500]]}
+    state = {"position_x": 1490, "position_y": 1500, "current_edge_id": "w", "last_node_id": "w"}
+    assert "second_connection" not in visible_road_directions(data, state)
+    assert not observable(data, state, "second_connection", 0.1, "construction")
 
 
 def test_campus_e0026_can_be_rechecked_from_adjacent_road():

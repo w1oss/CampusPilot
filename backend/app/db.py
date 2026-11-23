@@ -59,7 +59,9 @@ CREATE TABLE IF NOT EXISTS road_events (
     confirmed_by TEXT NOT NULL,
     note TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
-    expires_at TEXT
+    expires_at TEXT,
+    observe_count INTEGER NOT NULL DEFAULT 0,
+    last_observed_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS execution_state (
@@ -153,9 +155,18 @@ def get_conn() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(road_events)").fetchall()}
+    if "observe_count" not in cols:
+        conn.execute("ALTER TABLE road_events ADD COLUMN observe_count INTEGER NOT NULL DEFAULT 0")
+    if "last_observed_at" not in cols:
+        conn.execute("ALTER TABLE road_events ADD COLUMN last_observed_at TEXT")
+
+
 def init_db() -> None:
     with get_conn() as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:

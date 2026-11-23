@@ -95,6 +95,10 @@ def create_road_event(payload: dict[str, Any]) -> dict[str, Any]:
         raise ApiError(400, "unknown_edge", f"道路 {payload['edge_id']} 不在路网中")
     event_id = _new_id("road")
     with get_conn() as conn:
+        if payload["status"] == "open":
+            conn.execute("DELETE FROM road_events WHERE edge_id = ? AND status != 'open'", (payload["edge_id"],))
+        else:
+            conn.execute("DELETE FROM road_events WHERE edge_id = ? AND status = 'open'", (payload["edge_id"],))
         conn.execute(
             "INSERT INTO road_events (id, edge_id, status, source, confirmed_by, note, created_at, expires_at)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -116,10 +120,11 @@ def create_road_event(payload: dict[str, Any]) -> dict[str, Any]:
             ).fetchall()
         ]
         for task in affected:
+            event_type = "road_restored" if payload["status"] == "open" else "road_event"
             add_event(
                 conn,
                 task["id"],
-                "road_event",
+                event_type,
                 {"edge_id": payload["edge_id"], "status": payload["status"], "event_id": event_id},
             )
         event = dict(conn.execute("SELECT * FROM road_events WHERE id = ?", (event_id,)).fetchone())
@@ -596,6 +601,43 @@ def _set_status(conn, task_id: str, status: str) -> None:
     conn.execute("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?", (status, now_iso(), task_id))
 
 
+def _edges_near_node(mapdata, node_id: str) -> set[str]:
+    if not node_id:
+        return set()
+    return {eid for eid, edge in mapdata.edges.items() if edge["from"] == node_id or edge["to"] == node_id}
+
+
+def _observe_and_maybe_restore(conn, mapdata, task_id: str, plan_version: int, observed_edge_ids: set[str]) -> list[str]:
+    if not observed_edge_ids:
+        return []
+    restored: list[str] = []
+    for edge_id in observed_edge_ids:
+        row = conn.execute(
+            "SELECT id, edge_id, status, observe_count FROM road_events WHERE edge_id = ? AND status != 'open' ORDER BY created_at DESC LIMIT 1",
+            (edge_id,),
+        ).fetchone()
+        if row is None:
+            continue
+        new_count = int(row["observe_count"] or 0) + 1
+        if new_count >= 2:
+            conn.execute("DELETE FROM road_events WHERE id = ?", (row["id"],))
+            edge = mapdata.edges.get(edge_id, {})
+            add_event(
+                conn,
+                task_id,
+                "road_restored",
+                {"edge_id": edge_id, "edge_name": edge.get("name", edge_id), "reason": "sim_observe_twice"},
+                plan_version,
+            )
+            restored.append(edge_id)
+        else:
+            conn.execute(
+                "UPDATE road_events SET observe_count = ?, last_observed_at = ? WHERE id = ?",
+                (new_count, now_iso(), row["id"]),
+            )
+    return restored
+
+
 def replan(task_id: str, reason: str = "") -> dict[str, Any]:
     started = perf_counter()
     mapdata = load_map()
@@ -699,6 +741,8 @@ def sim_tick(task_id: str, seconds: float, speed_mps: float | None = None) -> di
         plan = _plan_rows(conn, task_id)[0]
         if int(plan["plan_version"]) != int(task["plan_version"]):
             raise ApiError(409, "stale_plan_version", "执行状态与计划版本不一致，请重新规划")
+        old_node_id = state["last_node_id"]
+        old_edge_id = state["current_edge_id"]
         working = {
             "current_edge_id": state["current_edge_id"],
             "edge_progress": state["edge_progress"],
@@ -708,6 +752,14 @@ def sim_tick(task_id: str, seconds: float, speed_mps: float | None = None) -> di
             "_remaining_edges": loads(state["remaining_edge_ids"], []),
         }
         outcome = advance(mapdata, task, stops, working, seconds, speed_mps or SIM_SPEED_MPS)
+        observed: set[str] = set()
+        observed.add(old_edge_id)
+        observed.add(outcome["current_edge_id"])
+        observed.update(_edges_near_node(mapdata, old_node_id))
+        if outcome["last_node_id"] != old_node_id:
+            observed.update(_edges_near_node(mapdata, outcome["last_node_id"]))
+        observed.discard(None)
+        restored = _observe_and_maybe_restore(conn, mapdata, task_id, task["plan_version"], observed)
         for stop_id in outcome["arrived_stop_ids"]:
             conn.execute("UPDATE stops SET status = 'arrived', arrived_at = ? WHERE id = ? AND status = 'pending'", (now_iso(), stop_id))
             add_event(conn, task_id, "stop_arrived", {"stop_id": stop_id, "source": "simulator"}, task["plan_version"])
@@ -726,7 +778,11 @@ def sim_tick(task_id: str, seconds: float, speed_mps: float | None = None) -> di
             ),
         )
     bundle = get_bundle(task_id)
-    bundle["sim"] = {"waiting": outcome["waiting"], "arrived_stop_ids": outcome["arrived_stop_ids"]}
+    bundle["sim"] = {
+        "waiting": outcome["waiting"],
+        "arrived_stop_ids": outcome["arrived_stop_ids"],
+        "restored_edges": restored,
+    }
     return bundle
 
 

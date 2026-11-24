@@ -19,6 +19,14 @@ const EXAMPLES = [
 
 const PRIORITY_LABEL: Record<string, string> = { urgent: '优先', normal: '普通' }
 
+const CATEGORY_LABEL: Record<string, string> = {
+  teaching: '教学与科研',
+  dorm: '学生公寓',
+  service: '生活服务',
+  facility: '场馆与后勤',
+  other: '其他',
+}
+
 export default function TaskComposer({ map, bundle, onCreated, onNewTask }: Props) {
   const [text, setText] = useState(EXAMPLES[0])
   const [parsed, setParsed] = useState<ParseResult | null>(null)
@@ -28,6 +36,17 @@ export default function TaskComposer({ map, bundle, onCreated, onNewTask }: Prop
   const [bulkItems, setBulkItems] = useState('')
 
   const locations = useMemo(() => map.nodes.filter((n) => n.kind === 'location'), [map])
+
+  const groupedLocations = useMemo(() => {
+    const groups = new Map<string, typeof locations>()
+    for (const node of locations) {
+      const key = node.category || 'other'
+      const bucket = groups.get(key) || []
+      bucket.push(node)
+      groups.set(key, bucket)
+    }
+    return Array.from(groups.entries())
+  }, [locations])
 
   const locationName = (id: string) => locations.find((n) => n.id === id)?.name || id
 
@@ -177,10 +196,14 @@ export default function TaskComposer({ map, bundle, onCreated, onNewTask }: Prop
           onChange={(event) => setDraft({ ...draft, pickup_location_id: event.target.value })}
         >
           <option value="">请选择取货点</option>
-          {locations.map((node) => (
-            <option key={node.id} value={node.id}>
-              {node.name}
-            </option>
+          {groupedLocations.map(([key, items]) => (
+            <optgroup key={key} label={CATEGORY_LABEL[key] || key}>
+              {items.map((node) => (
+                <option key={node.id} value={node.id}>
+                  {node.name}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       ),
@@ -303,10 +326,14 @@ export default function TaskComposer({ map, bundle, onCreated, onNewTask }: Prop
                 onChange={(event) => setDraft({ ...draft, pickup_location_id: event.target.value })}
               >
                 <option value="">请选择</option>
-                {locations.map((node) => (
-                  <option key={node.id} value={node.id}>
-                    {node.name}
-                  </option>
+                {groupedLocations.map(([key, items]) => (
+                  <optgroup key={key} label={CATEGORY_LABEL[key] || key}>
+                    {items.map((node) => (
+                      <option key={node.id} value={node.id}>
+                        {node.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </label>
@@ -338,10 +365,14 @@ export default function TaskComposer({ map, bundle, onCreated, onNewTask }: Prop
                     value={stop.location_id}
                     onChange={(event) => updateStop(index, { location_id: event.target.value })}
                   >
-                    {locations.map((node) => (
-                      <option key={node.id} value={node.id}>
-                        {node.name}
-                      </option>
+                    {groupedLocations.map(([key, items]) => (
+                      <optgroup key={key} label={CATEGORY_LABEL[key] || key}>
+                        {items.map((node) => (
+                          <option key={node.id} value={node.id}>
+                            {node.name}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                   <select

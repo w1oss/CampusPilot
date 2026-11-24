@@ -212,21 +212,24 @@ export default function CampusMap({ map, bundle, selectedEdgeId, onSelectEdge }:
             const isDelivered = deliveredIds.has(node.id)
             const isArrived = arrivedIds.has(node.id)
             const isActive = activeStopId === node.id && !isDelivered
-            const fill = isDelivered ? '#2c8a63' : isArrived || isActive ? '#d9782d' : '#ffffff'
-            const labelWidth = node.name.length * scaleValue(13) + scaleValue(8)
-            const labelHeight = scaleValue(18)
+            const isService = node.category === 'service'
+            const fill = isDelivered ? '#2c8a63' : isArrived || isActive ? '#d9782d' : isService ? '#8fb3cf' : '#ffffff'
+            const showLabel = !isService || isActive || isArrived || isDelivered
+            const labelWidth = node.name.length * scaleValue(11) + scaleValue(8)
+            const labelHeight = scaleValue(17)
             return (
               <g key={node.id}>
+                <title>{node.name}</title>
                 {isActive ? (
                   <circle cx={node.x} cy={node.y} r={scaleValue(14)} fill="#d9782d" opacity={0.18} className="pulse-dot" />
                 ) : null}
                 <circle
                   cx={node.x}
                   cy={node.y}
-                  r={scaleValue(8)}
+                  r={isService ? scaleValue(5) : scaleValue(8)}
                   fill={fill}
                   stroke="#123c32"
-                  strokeWidth={scaleValue(2)}
+                  strokeWidth={scaleValue(isService ? 1.4 : 2)}
                   filter="url(#soft-shadow)"
                 />
                 {isDelivered ? (
@@ -238,20 +241,22 @@ export default function CampusMap({ map, bundle, selectedEdgeId, onSelectEdge }:
                     strokeLinecap="round"
                   />
                 ) : null}
-                <g transform={`translate(${node.x}, ${node.y - scaleValue(16)})`}>
-                  <rect
-                    x={-labelWidth / 2}
-                    y={-labelHeight + scaleValue(6)}
-                    width={labelWidth}
-                    height={labelHeight}
-                    rx={scaleValue(5)}
-                    fill="#fffdf7"
-                    stroke="#dcd8ca"
-                  />
-                  <text x={0} y={scaleValue(1)} textAnchor="middle" fontSize={scaleValue(12)} fill="#22352c" fontWeight={600}>
-                    {node.name}
-                  </text>
-                </g>
+                {showLabel ? (
+                  <g transform={`translate(${node.x}, ${node.y - scaleValue(16)})`}>
+                    <rect
+                      x={-labelWidth / 2}
+                      y={-labelHeight + scaleValue(6)}
+                      width={labelWidth}
+                      height={labelHeight}
+                      rx={scaleValue(5)}
+                      fill="#fffdf7"
+                      stroke="#dcd8ca"
+                    />
+                    <text x={0} y={scaleValue(1)} textAnchor="middle" fontSize={scaleValue(11)} fill="#22352c" fontWeight={600}>
+                      {node.name}
+                    </text>
+                  </g>
+                ) : null}
               </g>
             )
           }

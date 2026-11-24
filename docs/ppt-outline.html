@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CampusPilot 比赛 PPT 大纲</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    max-width: 1080px; margin: 0 auto; padding: 40px 28px 90px;
+    font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+    color: #1a2c24; background: #f7f5ef; line-height: 1.78; font-size: 15px;
+  }
+  h1 { font-size: 32px; margin: 0 0 10px; color: #123c32; letter-spacing: 0.5px; }
+  h2 { margin: 38px 0 14px; padding-bottom: 7px; border-bottom: 2px solid #e2ded0; color: #123c32; font-size: 23px; }
+  h3 { margin: 24px 0 9px; color: #1d5a4a; font-size: 17px; }
+  p { margin: 9px 0; }
+  ul, ol { margin: 8px 0 8px 0; padding-left: 26px; }
+  li { margin: 4px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; background: #fffdf8; font-size: 14px; }
+  th, td { border: 1px solid #e2ded0; padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #f1efe8; color: #123c32; }
+  code { background: #ece9df; padding: 1px 5px; border-radius: 4px; font-family: Consolas, monospace; font-size: 13px; }
+  pre { background: #123c32; color: #e8f0e8; padding: 15px 17px; border-radius: 10px; overflow: auto; }
+  pre code { background: none; color: inherit; padding: 0; }
+  blockquote { margin: 14px 0; padding: 10px 16px; border-left: 4px solid #d9782d; background: #fff8ec; color: #6b4a1e; }
+  hr { border: none; border-top: 1px solid #e2ded0; margin: 30px 0; }
+  strong { color: #123c32; }
+</style>
+</head>
+<body>
+<h1>CampusPilot 比赛 PPT 大纲（13 页）</h1>
+<blockquote>用途：作品整体介绍 PPT / PDF</blockquote>
+<blockquote>依据：<code>docs/competition-overview.md</code></blockquote>
+<blockquote>数据版本：地图 <code>5.0.0</code>、提交 <code>f8cf94b</code></blockquote>
+<blockquote>每页包含：标题 / 一句话 / 页面要点 / 配图建议 / 讲稿提示</blockquote>
+<hr>
+<h2>第 1 页 · 封面</h2>
+<p><strong>标题</strong>：CampusPilot</p>
+<p><strong>副标题</strong>：校园低速配送任务 Agent</p>
+<p><strong>底部信息</strong>：团队 / 日期 / <code>github.com/w1oss/CampusPilot</code></p>
+<p><strong>页面要点</strong></p>
+<ul><li>一句话定位：把一句配送需求变成可执行、可追溯的任务</li><li>关键词：任务规划 · 异常重规划 · 多 Agent 协作 · 管理员闭环</li><li>明确边界：不是自动驾驶，不控制真实车辆</li></ul>
+<p><strong>配图建议</strong>：校园地图全景（<code>docs/campus-map-preview.svg</code>）作为半透明背景 + 工作台截图。</p>
+<p><strong>讲稿提示</strong>：“我们做的不是一辆车，而是一个调度员。”</p>
+<hr>
+<h2>第 2 页 · 场景背景</h2>
+<p><strong>标题</strong>：校园配送，难在“变化”</p>
+<p><strong>一句话</strong>：不是送不到，是封路、改时间、加站点之后不知道怎么改。</p>
+<p><strong>页面要点</strong></p>
+<ul><li>多站点、时间窗、优先级靠经验，顺序容易冲突</li><li>施工、活动封路后，原路线失效，剩余站点要重排</li><li>需求在微信、路线在纸上、异常靠电话，信息分散</li><li>模拟数据和真实配送混在一起，验收与追责困难</li></ul>
+<p><strong>配图建议</strong>：四象限痛点图；左侧“现状”，右侧“后果”。</p>
+<p><strong>讲稿提示</strong>：把痛点落在“变化”和“不可追溯”两个词上。</p>
+<hr>
+<h2>第 3 页 · 方案总览</h2>
+<p><strong>标题</strong>：不替人开车，替人想清楚怎么送</p>
+<p><strong>一句话</strong>：自然语言 → 结构化任务 → 计划 → 执行 → 异常 → 报告。</p>
+<p><strong>页面要点</strong></p>
+<ul><li>发起人：一句话描述需求，缺什么系统逐项问</li><li>配送员：按清单执行，异常时上报或接收上游消息</li><li>管理员：接单、改状态、写备注、看报告</li><li>闭环：解析 → 补问 → 计划 → 执行 → 重规划 → 报告</li></ul>
+<p><strong>配图建议</strong>：横向闭环流程图（6 个节点），底部标注三类用户。</p>
+<p><strong>讲稿提示</strong>：强调“任务级”，不是“车辆控制级”。</p>
+<hr>
+<h2>第 4 页 · 功能架构</h2>
+<p><strong>标题</strong>：Agent 判断，代码计算</p>
+<p><strong>一句话</strong>：模型只做理解和判断，路径、状态、指标由确定性代码算。</p>
+<p><strong>页面要点</strong></p>
+<ul><li>交互层：工作台 / 校园地图 / 执行控制 / 管理员 / 报告</li><li>Agent 层：任务规划 / 道路观察 / 调度复盘</li><li>确定性引擎：白名单校验、Dijkstra、站点排序、状态机、模拟器、报告</li><li>数据层：SQLite + 地图 JSON + 校园底图</li><li>约束：Agent 不能直接确认交付、不能直接改路况</li></ul>
+<p><strong>配图建议</strong>：五层架构图；右侧用红色标注“Agent 不越权”。</p>
+<p><strong>讲稿提示</strong>：这是后面所有亮点的地基。</p>
+<hr>
+<h2>第 5 页 · 任务理解</h2>
+<p><strong>标题</strong>：一句话变成可执行任务</p>
+<p><strong>一句话</strong>：规则保证稳定，DeepSeek 提升泛化，缺信息逐项问。</p>
+<p><strong>页面要点</strong></p>
+<ul><li>规则 + DeepSeek 双通道，模型失败自动回落并标注</li><li>地点白名单校验，模型不能编造新地点</li><li>缺取货点 / 站点 / 物品：页面逐项补问，补全前不能创建</li><li>白名单外地名明确提示，不静默丢弃</li><li>20 条人工样例：规则 <strong>20/20</strong>，DeepSeek <strong>20/20</strong>（18 模型 + 2 兜底）</li></ul>
+<p><strong>配图建议</strong>：解析界面 + 补问卡片 + 评测输出截图（三张小图并排）。</p>
+<p><strong>讲稿提示</strong>：重点讲“失败兜底”和“追问”，不要只讲模型。</p>
+<hr>
+<h2>第 6 页 · 地图与路网</h2>
+<p><strong>标题</strong>：真实校园底图，80 个地点可达</p>
+<p><strong>一句话</strong>：不是抽象坐标，是团队标注的北邮西土城路校区。</p>
+<p><strong>页面要点</strong></p>
+<ul><li>底图 2491×3509，团队标注示意图</li><li>80 个可交互地点：41 栋建筑 + 39 个服务点；另有 6 个校门</li><li>路网 217 节点 / 261 段，6 纵 × 10 横</li><li>路线只走道路网格，站点用短入口线接入</li><li>服务点小蓝点 + 悬停名称，避免标签重叠</li></ul>
+<p><strong>配图建议</strong>：地图全图 + 局部放大（教三楼、图书馆、宿舍区）。</p>
+<p><strong>讲稿提示</strong>：强调“真实布局 + 可计算”，不是一张图片。</p>
+<hr>
+<h2>第 7 页 · 计划与执行</h2>
+<p><strong>标题</strong>：优先站点先送，状态全程可追溯</p>
+<p><strong>一句话</strong>：排序、路线、状态机、模拟/真实隔离。</p>
+<p><strong>页面要点</strong></p>
+<ul><li>排序：优先站点前置 + 截止时间约束</li><li>路线：Dijkstra，支持单行道与封路</li><li>状态机：待开始 → 执行中 → 暂停/继续 → 完成/取消</li><li>动作幂等：<code>request_id</code>，重复交付不重复记账</li><li>模拟与真实隔离：模拟结果不计入真实成果</li></ul>
+<p><strong>配图建议</strong>：执行面板（计划摘要 + 站点清单 + 状态按钮）。</p>
+<p><strong>讲稿提示</strong>：强调“刷新可恢复”和“人工确认才记账”。</p>
+<hr>
+<h2>第 8 页 · 异常与重规划</h2>
+<p><strong>标题</strong>：封路后，保留已完成，只重排剩余</p>
+<p><strong>一句话</strong>：异常不是报错，是重新算一遍剩下的任务。</p>
+<p><strong>页面要点</strong></p>
+<ul><li>地图选路 → 文字/照片 → 候选判断 → 人工确认</li><li>路况事件带有效期，到期自动失效</li><li>重规划保留已完成站点，只排剩余</li><li>不可达站点明确提示，不伪造路线</li><li>计划版本递增，操作可追溯</li></ul>
+<p><strong>配图建议</strong>：封路前后路线对比（两张地图）+ 重规划结果。</p>
+<p><strong>讲稿提示</strong>：这是“任务级决策”最直观的一页。</p>
+<hr>
+<h2>第 9 页 · 实时语义接入</h2>
+<p><strong>标题</strong>：接收上游感知，先停车再决策</p>
+<p><strong>一句话</strong>：摄像头/视觉模型看，CampusPilot 决定怎么改任务。</p>
+<p><strong>页面要点</strong></p>
+<ul><li>结构化消息：道路、位置、类别、通行性、置信度</li><li>先停车（独立事务）→ 道路观察 → 调度决策 → 放行</li><li>决策：观察 / 等待 / 局部绕行 / 重规划 / 继续</li><li>安全规则：幂等、修订号、低置信度不解除、复核证据</li><li>场景隔离：模拟障碍不污染真实任务</li></ul>
+<p><strong>配图建议</strong>：语义事件面板 + 停车/放行状态截图。</p>
+<p><strong>讲稿提示</strong>：这是团队扩展模块，不夸大“自动驾驶”，强调任务级。</p>
+<hr>
+<h2>第 10 页 · 多 Agent 协作</h2>
+<p><strong>标题</strong>：三个角色，有痕迹才叫协作</p>
+<p><strong>一句话</strong>：不是三个名字，是三次可核查的调用。</p>
+<p><strong>页面要点</strong></p>
+<ul><li>任务规划 Agent：解析、补问、创建任务、生成计划</li><li>道路观察 Agent：异常候选判断</li><li>调度复盘 Agent：状态、重规划、接单、备注、报告</li><li>每次调用落库：输入摘要、输出摘要、工具、耗时</li><li>页面时间线 + 报告调用统计；痕迹显示 <code>解析=llm:deepseek-chat</code></li></ul>
+<p><strong>配图建议</strong>：执行面板“Agent 协作记录”时间线 + 报告统计截图。</p>
+<p><strong>讲稿提示</strong>：直接展示痕迹，不讲概念。</p>
+<hr>
+<h2>第 11 页 · 管理员与报告</h2>
+<p><strong>标题</strong>：谁接的单、改了什么，都能查</p>
+<p><strong>一句话</strong>：接单、状态、备注、报告形成管理闭环。</p>
+<p><strong>页面要点</strong></p>
+<ul><li>任务筛选：全部 / 待接单 / 执行中 / 已完成</li><li>接单：记录接单人与时间</li><li>状态操作：开始、暂停、继续、取消、完成</li><li>处理备注：写入任务时间线</li><li>报告：完成率、计划版本、重规划次数、Agent 调用次数</li><li>验收路径：非队员可独立完成一次任务</li></ul>
+<p><strong>配图建议</strong>：管理员视图 + 报告页。</p>
+<p><strong>讲稿提示</strong>：强调“非队员可操作”，这是验收点。</p>
+<hr>
+<h2>第 12 页 · 码道应用</h2>
+<p><strong>标题</strong>：用码道把“想法”变成可运行系统</p>
+<p><strong>一句话</strong>：从需求解析到代码、测试、合并、文档，全流程有迹可循。</p>
+<p><strong>页面要点</strong></p>
+<ul><li>需求解析：两份方案 docx → 验收标准与技术约束</li><li>代码审查：发现前端构建链路冲突、地图字段遗漏</li><li>开发：前后端功能、80 地点路网、Agent 痕迹、管理员视图</li><li>测试：20 条评测、ASGI 全链路、合并回归</li><li>合并：拉取队友 <code>zzz</code> 分支，解决 <code>db.py</code>/<code>service.py</code> 冲突</li><li>原则：AI 产出必须编译、测试、人工确认；不虚构效率百分比</li></ul>
+<p><strong>配图建议</strong>：码道对话截图 + 测试输出 + Git 合并记录。</p>
+<p><strong>讲稿提示</strong>：这页要真实截图，不讲空话。</p>
+<hr>
+<h2>第 13 页 · 验证与边界</h2>
+<p><strong>标题</strong>：能跑、能复现、边界清楚</p>
+<p><strong>一句话</strong>：诚实的边界比夸大的能力更加分。</p>
+<p><strong>页面要点</strong></p>
+<ul><li>80 个地点两两可达；规则与 DeepSeek 均 20/20</li><li>前端 TypeScript/构建通过；后端全量测试通过</li><li>单端口启动：<code>start.bat</code> → <code>http://127.0.0.1:8000/</code></li><li>边界：不做自动驾驶；局部绕行仅模拟；路况来自人工/上游</li><li>后续：照片上传 + 视觉异常分析；真实用户试用</li></ul>
+<p><strong>配图建议</strong>：测试输出 + 路线图（已完成 / 下一步）。</p>
+<p><strong>讲稿提示</strong>：主动讲边界，避免评委追问。</p>
+<hr>
+<h2>附 A：纯文本大纲（可粘贴到 PowerPoint 大纲视图）</h2>
+<pre><code>CampusPilot 校园低速配送任务 Agent
+  校园多站点配送的任务规划与执行助手
+  不做自动驾驶，不控制真实车辆
+
+校园配送，难在“变化”
+  多站点、时间窗、优先级靠经验
+  施工/活动封路后原路线失效
+  需求、路线、异常信息分散
+  模拟与真实混在一起，验收困难
+
+不替人开车，替人想清楚怎么送
+  自然语言 → 结构化任务
+  计划 → 执行 → 异常 → 重规划 → 报告
+  三类用户：发起人 / 配送员 / 管理员
+
+Agent 判断，代码计算
+  交互层：工作台/地图/管理员/报告
+  Agent 层：任务规划/道路观察/调度复盘
+  确定性引擎：白名单/Dijkstra/排序/状态机
+  数据层：SQLite + 地图 JSON + 底图
+
+一句话变成可执行任务
+  规则 + DeepSeek 双通道
+  缺字段逐项补问
+  白名单外地名明确提示
+  20 条样例：规则 20/20，模型 20/20
+
+真实校园底图，80 个地点可达
+  2491×3509 团队标注底图
+  80 地点 + 6 校门
+  217 节点 / 261 段
+  路线走道路网格，站点短入口线
+
+优先站点先送，状态全程可追溯
+  排序：优先 + 截止时间
+  路线：Dijkstra，支持封路/单行
+  状态机 + request_id 幂等
+  模拟与真实隔离
+
+封路后，保留已完成，只重排剩余
+  选路 → 文字/照片 → 候选 → 人工确认
+  路况有效期，到期自动失效
+  重规划保留已交付站点
+  不可达明确提示
+
+接收上游感知，先停车再决策
+  结构化消息：道路/位置/类别/置信度
+  先停车 → 判断 → 放行
+  观察/等待/局部绕行/重规划
+  幂等、修订号、复核证据、场景隔离
+
+三个角色，有痕迹才叫协作
+  任务规划 / 道路观察 / 调度复盘
+  每次调用落库：输入/输出/工具/耗时
+  页面时间线 + 报告统计
+  痕迹显示“解析=llm:deepseek-chat”
+
+谁接的单、改了什么，都能查
+  接单、状态、备注
+  备注写入时间线
+  报告：完成率/版本/重规划/Agent 调用
+
+用码道把“想法”变成可运行系统
+  需求文档解析 → 验收标准
+  代码审查 → 修复链路/字段
+  开发/测试/合并/文档
+  AI 产出经编译、测试、人工确认
+
+能跑、能复现、边界清楚
+  80 地点全连通；20/20
+  前端构建通过；后端全量测试通过
+  边界：不做自动驾驶；模拟隔离
+  后续：照片视觉分析 + 真实用户试用</code></pre>
+<hr>
+<h2>附 B：截图清单</h2>
+<table><thead><tr><th>截图</th><th>页面</th><th>用途</th></tr></thead><tbody><tr><td>地图全景（80 地点）</td><td>6</td><td>展示真实底图与路网</td></tr><tr><td>局部放大（教三楼/图书馆）</td><td>6</td><td>展示站点接入与路线</td></tr><tr><td>解析 + 补问卡片</td><td>5</td><td>展示任务理解与追问</td></tr><tr><td>20 条评测输出</td><td>5</td><td>展示 20/20</td></tr><tr><td>执行面板（计划/站点）</td><td>7</td><td>展示计划与状态</td></tr><tr><td>封路前后路线对比</td><td>8</td><td>展示重规划</td></tr><tr><td>语义事件面板</td><td>9</td><td>展示上游接入与停车</td></tr><tr><td>Agent 协作时间线</td><td>10</td><td>展示调用痕迹</td></tr><tr><td>管理员视图</td><td>11</td><td>展示接单/备注</td></tr><tr><td>报告页</td><td>11</td><td>展示指标与时间线</td></tr><tr><td>码道对话</td><td>12</td><td>展示开发过程</td></tr><tr><td>测试输出 / Git 记录</td><td>13</td><td>展示可复现</td></tr></tbody></table>
+<hr>
+<h2>附 C：制作提示</h2>
+<ol><li><strong>一页一个观点</strong>：不要在一页塞满功能清单；</li><li><strong>数字放大</strong>：80 个地点、217 节点、261 段、20/20；</li><li><strong>先图后字</strong>：地图、时间线、路线对比优先于文字；</li><li><strong>边界单独讲</strong>：第 13 页主动说明“不做自动驾驶”；</li><li><strong>未完成不冒充</strong>：照片视觉分析放在“后续规划”；</li><li><strong>码道页要真实</strong>：用真实对话/测试/提交截图，不编造效率数字。</li></ol>
+<hr>
+<h2>附 D：3 分钟演示顺序（与 PPT 对应）</h2>
+<ol><li>打开工作台，输入需求（第 5 页）</li><li>展示补问卡片（第 5 页）</li><li>生成计划，看地图路线（第 6、7 页）</li><li>开始/取货/交付（第 7 页）</li><li>上报封路，展示重规划（第 8 页）</li><li>切到管理员视图，接单/备注（第 11 页）</li><li>打开报告，看 Agent 调用（第 10、11 页）</li><li>收尾讲边界与后续（第 13 页）</li></ol>
+</body>
+</html>

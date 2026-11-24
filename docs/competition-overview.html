@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CampusPilot 比赛作品介绍</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    max-width: 1080px; margin: 0 auto; padding: 40px 28px 90px;
+    font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+    color: #1a2c24; background: #f7f5ef; line-height: 1.78; font-size: 15px;
+  }
+  h1 { font-size: 32px; margin: 0 0 10px; color: #123c32; letter-spacing: 0.5px; }
+  h2 { margin: 38px 0 14px; padding-bottom: 7px; border-bottom: 2px solid #e2ded0; color: #123c32; font-size: 23px; }
+  h3 { margin: 24px 0 9px; color: #1d5a4a; font-size: 17px; }
+  p { margin: 9px 0; }
+  ul, ol { margin: 8px 0 8px 0; padding-left: 26px; }
+  li { margin: 4px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; background: #fffdf8; font-size: 14px; }
+  th, td { border: 1px solid #e2ded0; padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #f1efe8; color: #123c32; }
+  code { background: #ece9df; padding: 1px 5px; border-radius: 4px; font-family: Consolas, monospace; font-size: 13px; }
+  pre { background: #123c32; color: #e8f0e8; padding: 15px 17px; border-radius: 10px; overflow: auto; }
+  pre code { background: none; color: inherit; padding: 0; }
+  blockquote { margin: 14px 0; padding: 10px 16px; border-left: 4px solid #d9782d; background: #fff8ec; color: #6b4a1e; }
+  hr { border: none; border-top: 1px solid #e2ded0; margin: 30px 0; }
+  strong { color: #123c32; }
+</style>
+</head>
+<body>
+<h1>CampusPilot 校园低速配送任务 Agent</h1>
+<blockquote>比赛作品整体介绍（PPT / PDF 素材）</blockquote>
+<blockquote>更新时间：2026-11-24</blockquote>
+<blockquote>仓库：https://github.com/w1oss/CampusPilot</blockquote>
+<blockquote>当前版本：地图 <code>5.0.0</code>，提交 <code>f8cf94b</code></blockquote>
+<hr>
+<h2>0. 一页速览</h2>
+<table><thead><tr><th>项目</th><th>内容</th></tr></thead><tbody><tr><td>一句话定位</td><td>面向校园多站点配送的<strong>任务规划与执行助手</strong>，不是自动驾驶</td></tr><tr><td>解决的问题</td><td>自然语言需求 → 可执行任务 → 路线与顺序 → 异常重规划 → 可追溯报告</td></tr><tr><td>核心用户</td><td>任务发起人、配送员、管理员</td></tr><tr><td>技术栈</td><td>React + TypeScript、FastAPI、SQLite、SVG 校园地图、DeepSeek（OpenAI 兼容）</td></tr><tr><td>地图规模</td><td>2491×3509 真实校园底图，80 个可交互地点、6 个校门、217 节点、261 段道路</td></tr><tr><td>任务理解</td><td>规则解析 + DeepSeek 双通道，20 条人工样例评测 <strong>20/20</strong></td></tr><tr><td>多 Agent</td><td>任务规划 / 道路观察 / 调度复盘，调用痕迹可在页面和报告中核查</td></tr><tr><td>异常处理</td><td>人工上报 + 上游语义接入；安全停车、观察、等待、局部绕行、重规划</td></tr><tr><td>工程质量</td><td>全量 pytest 通过、前端类型与构建通过、单端口启动、Git 可复现</td></tr><tr><td>当前缺口</td><td>照片上传与视觉异常分析（唯一未完成的业务功能）</td></tr></tbody></table>
+<hr>
+<h2>1. 场景背景与痛点</h2>
+<h3>1.1 场景</h3>
+<p>北京邮电大学西土城路校区，教学区、学生公寓、食堂、科研楼、服务点分散。日常存在大量小件配送：</p>
+<ul><li>实验材料、文件、会议资料；</li><li>饮用水、餐食、快递；</li><li>临时活动物资。</li></ul>
+<h3>1.2 现有方式的痛点</h3>
+<table><thead><tr><th>痛点</th><th>具体表现</th></tr></thead><tbody><tr><td>多站点顺序靠经验</td><td>先送哪站、哪站优先，靠人记；截止时间容易冲突</td></tr><tr><td>道路变化无法快速响应</td><td>施工、活动封路后，原路线失效，需要重新排剩余站点</td></tr><tr><td>信息分散</td><td>需求在微信/口头，路线在纸上，异常靠电话</td></tr><tr><td>模拟与真实混在一起</td><td>演示数据和真实配送记录无法区分，验收困难</td></tr><tr><td>责任与过程不可追溯</td><td>谁接的单、谁改的状态、哪个 Agent 做了什么，没有记录</td></tr></tbody></table>
+<h3>1.3 目标</h3>
+<p>把一句自然语言需求，变成：</p>
+<pre><code>结构化任务 → 可执行计划 → 执行状态 → 异常处理 → 可追溯报告</code></pre>
+<p><strong>边界：</strong> 系统不控制真实车辆，不做自动驾驶；虚拟车辆与局部绕行只用于演示。</p>
+<hr>
+<h2>2. 方案总览</h2>
+<h3>2.1 一句话</h3>
+<blockquote>CampusPilot 不替配送员开车，它替配送员<strong>想清楚怎么送、封路后怎么改</strong>。</blockquote>
+<h3>2.2 业务闭环</h3>
+<pre><code>① 描述需求（自然语言）
+        ↓
+② 解析 + 逐项补问
+        ↓
+③ 生成计划（顺序、路线、ETA）
+        ↓
+④ 执行（开始 / 取货 / 到达 / 交付）
+        ↓
+⑤ 异常上报（人工 / 上游语义）
+        ↓
+⑥ 停车 → 判断 → 等待 / 局部绕行 / 重规划
+        ↓
+⑦ 完成 → 报告 → 历史任务
+        ↓
+⑧ 管理员接单 / 状态 / 备注</code></pre>
+<h3>2.3 三类用户</h3>
+<table><thead><tr><th>角色</th><th>主要操作</th></tr></thead><tbody><tr><td>任务发起人</td><td>描述需求、补全信息、确认创建</td></tr><tr><td>配送员</td><td>查看清单、开始/到达/取货/交付、上报异常</td></tr><tr><td>管理员</td><td>接单、更新任务状态、写处理备注、查看报告</td></tr></tbody></table>
+<hr>
+<h2>3. 功能架构</h2>
+<pre><code>┌──────────────────────────────────────────────┐
+│ 交互层（React + TypeScript）                  │
+│ 工作台 / 校园地图 / 执行控制 / 管理员 / 报告   │
+└──────────────────────┬───────────────────────┘
+                       │ REST /api
+┌──────────────────────▼───────────────────────┐
+│ API 层（FastAPI，单端口 8000）                 │
+│ 页面 + 静态资源 + 业务接口同源托管             │
+└──────────────────────┬───────────────────────┘
+                       │
+┌──────────────────────▼───────────────────────┐
+│ Agent 层（三个分工角色 + 调用痕迹）            │
+│ 任务规划 Agent / 道路观察 Agent / 调度复盘 Agent│
+└──────────────────────┬───────────────────────┘
+                       │ 工具调用
+┌──────────────────────▼───────────────────────┐
+│ 确定性引擎                                     │
+│ 白名单校验 / Dijkstra / 站点排序 / 状态机      │
+│ 模拟推进 / 重规划 / 报告指标                   │
+└──────────────────────┬───────────────────────┘
+                       │
+┌──────────────────────▼───────────────────────┐
+│ 数据层                                         │
+│ SQLite（任务/站点/计划/事件/Agent 痕迹/接单/备注）│
+│ 地图 JSON + 校园底图                            │
+└──────────────────────────────────────────────┘</code></pre>
+<h3>3.1 设计原则</h3>
+<ul><li><strong>Agent 只负责理解、判断和编排</strong>；</li><li>日期、任务状态、地点白名单、优先级排序、路径与报告指标由<strong>确定性代码</strong>计算；</li><li>模型不能直接执行任意命令，也不能在用户确认前把任务标记为完成；</li><li>模拟任务与真实任务隔离，模拟结果不计入真实配送成果。</li></ul>
+<hr>
+<h2>4. 已实现功能</h2>
+<h3>4.1 任务创建与逐项补问</h3>
+<ul><li>自然语言输入，示例句式一键填入；</li><li>解析结果可编辑：取货点、站点、物品、优先级、截止时间；</li><li>缺失信息用<strong>带编号的问题卡片</strong>逐项追问：</li><li>缺取货点 → 卡片内下拉选择；</li><li>缺站点 → 一键添加；</li><li>缺物品 → 统一物品一键应用到所有站点；</li><li>白名单外地名 → 明确提示，不静默丢弃；</li><li>关键项未补全时，“确认任务信息”按钮禁用。</li></ul>
+<h3>4.2 任务解析（规则 + DeepSeek）</h3>
+<ul><li>规则解析：地点别名、数量、物品、优先级、中文时间（“下午4点半” → 16:30）；</li><li>真实模型：DeepSeek <code>deepseek-chat</code>，OpenAI 兼容接口；</li><li>模型失败或无有效取货点时<strong>自动回落规则解析</strong>，并明确标注；</li><li>地点白名单校验，模型不能创建新地点；</li><li>20 条人工标注样例集：规则 <strong>20/20</strong>，DeepSeek <strong>20/20</strong>（18 条模型 + 2 条规则兜底）。</li></ul>
+<h3>4.3 校园地图与路网</h3>
+<ul><li>底图：团队标注的《北京邮电大学西土城路校区示意图》，2491×3509；</li><li>可交互地点：<strong>80 个</strong>（41 栋建筑 + 39 个服务点），另有 6 个校门；</li><li>分类：教学与科研、学生公寓、生活服务、场馆与后勤；</li><li>路网：6 纵 × 10 横道路网格，<strong>217 个节点、261 段道路</strong>；</li><li>每个地点用短入口线接入最近路口，路线只走道路网格；</li><li>距离按约 0.28 米/像素估算，页面明确标注“示例估算”；</li><li>服务点在地图上显示为小蓝点，悬停显示名称，避免 80 个标签重叠。</li></ul>
+<h3>4.4 计划与执行</h3>
+<ul><li>多站点排序：优先站点前置、截止时间约束；</li><li>路线：Dijkstra，支持单行道与封路；</li><li>输出：站点顺序、物品、ETA、路线、预计耗时、不可达站点；</li><li>状态机：待开始 → 执行中 → 暂停/继续 → 完成/取消；</li><li>动作：开始、到达、确认取货、确认交付、完成、取消；</li><li>幂等：<code>request_id</code>，重复交付不重复记账；</li><li>模拟执行：沿折线推进，到站等待人工确认，刷新后可恢复；</li><li>真实模式：人工按清单执行，只有人工确认才记录交付。</li></ul>
+<h3>4.5 道路异常与重规划</h3>
+<ul><li>人工上报：选道路 → 文字说明 → 候选判断 → 人工确认 → 写入路况；</li><li>路况事件带<strong>有效期</strong>，过期自动失效；</li><li>重规划：保留已完成站点，只重排剩余站点；</li><li>不可达：明确提示，不伪造路线；</li><li>模拟经过两次可自动恢复临时路障；</li><li>实景演示：封路后路线绕行，计划版本递增。</li></ul>
+<h3>4.6 实时语义接入（团队扩展）</h3>
+<ul><li><code>POST /api/semantic-events</code>：接收上游视觉/语言系统的结构化结果；</li><li>消息字段：<code>event_id</code>、<code>task_id</code>、<code>obstacle_id</code>、<code>revision</code>、<code>map_version</code>、<code>edge_id</code>、<code>edge_fraction</code>、<code>category</code>、<code>passability</code>、<code>confidence</code>；</li><li>安全规则：</li><li>先停车、再决策（停车独立事务先提交）；</li><li>重复消息幂等；</li><li>旧修订号不覆盖新状态；</li><li>低置信度不能解除已确认障碍；</li><li>解除需要复核证据；</li><li>模拟任务与真实任务场景隔离；</li><li>决策动作：<code>observe</code>、<code>wait</code>、<code>replan</code>、<code>local_avoid</code>、<code>continue</code>；</li><li>局部绕行（纸箱等小障碍）只在原道路画短弧通过，不改全局路线；</li><li>施工/封路 → 重规划剩余站点；行人 → 先等待；</li><li>后台推进器约 0.1 秒推进模拟任务，不依赖浏览器；</li><li>命令行模拟上游：<code>python mock_upstream.py --demo</code>。</li></ul>
+<h3>4.7 多 Agent 协作与痕迹</h3>
+<table><thead><tr><th>Agent</th><th>职责</th><th>记录的动作</th></tr></thead><tbody><tr><td>任务规划 Agent</td><td>理解需求、补问、创建任务、生成计划</td><td><code>parse_task</code>、<code>create_task</code>、<code>plan_stops</code></td></tr><tr><td>道路观察 Agent</td><td>图文异常候选判断</td><td><code>classify_hazard</code>（照片能力待接）</td></tr><tr><td>调度复盘 Agent</td><td>状态更新、重规划、接单、备注、报告</td><td><code>update_status</code>、<code>replan_task</code>、<code>accept_task</code>、<code>note_update</code></td></tr></tbody></table>
+<ul><li>每次调用写入 <code>agent_traces</code>：输入摘要、输出摘要、工具、状态、耗时、时间；</li><li>执行面板显示最近 6 条，报告页显示完整时间线和调用统计；</li><li>痕迹中可直接看到“解析=<code>llm:deepseek-chat</code>”，作为真实模型调用的证据。</li></ul>
+<h3>4.8 管理员视图</h3>
+<ul><li>任务列表与筛选：全部 / 待接单 / 执行中 / 已完成；</li><li>接单：记录接单人与时间；</li><li>状态操作：开始、暂停、继续、取消、完成；</li><li>处理备注：写入任务时间线；</li><li>一键跳转工作台继续执行；</li><li>验收路径：非队员管理员可接单 → 处理 → 完成。</li></ul>
+<h3>4.9 历史任务与报告</h3>
+<ul><li>历史任务：状态、取货点、站点进度、截止、接单人、更新时间；</li><li>报告：完成率、已交付/总站点、计划版本、重规划次数、Agent 调用次数、站点明细、计划历史、道路事件、Agent 时间线；</li><li>支持浏览器打印 / 导出 PDF。</li></ul>
+<h3>4.10 工程质量</h3>
+<ul><li>单端口启动：FastAPI 同时托管页面、静态资源和 API；</li><li>一键启动：<code>start.bat</code>（Windows）/ <code>start.sh</code>；</li><li><code>.env</code> 自动加载，<code>.env</code> 与运行数据不提交；</li><li>20 条解析评测、ASGI 全链路测试、service 冒烟、语义桥/可见性/自动恢复测试；</li><li>前端 TypeScript 检查 + Babel 构建；</li><li>Git 仓库与合并记录可复现。</li></ul>
+<hr>
+<h2>5. 核心亮点</h2>
+<h3>亮点 1：真实校园底图 + 80 个地点 + 任务级路网</h3>
+<ul><li>不是抽象坐标，而是团队标注的真实校园示意图；</li><li>80 个地点全部接入道路网格，路线可达任意地点；</li><li>路线走横平竖直的道路，站点只用短入口线接入；</li><li>服务点密集时用“小蓝点 + 悬停名称”，兼顾信息量和可读性。</li></ul>
+<h3>亮点 2：双解析通道 + 逐项补问 + 失败兜底</h3>
+<ul><li>规则解析保证稳定，DeepSeek 提升泛化；</li><li>模型失败自动回落规则，不让主流程卡死；</li><li>缺信息不是“报错”，而是逐项问清楚；</li><li>20 条人工样例把“任务理解”变成可展示的分数。</li></ul>
+<h3>亮点 3：多 Agent 协作“有痕迹”，不是三个名字</h3>
+<ul><li>三个 Agent 有明确职责、工具和输入输出；</li><li>每次调用落库，页面和报告都能看到；</li><li>Agent 只做理解与判断，路径、状态、指标由代码算；</li><li>答辩时可以直接展示调用时间线，证明协作过程。</li></ul>
+<h3>亮点 4：异常处理是“任务级”，不是自动驾驶</h3>
+<ul><li>小障碍：配送员自己绕/等，系统不改路线；</li><li>大障碍：封路后重排剩余站点，不可达明确提示；</li><li>上游语义接入：先停车、再决策、可观察/等待/局部绕行/重规划；</li><li>场景隔离：模拟障碍不污染真实任务。</li></ul>
+<h3>亮点 5：管理员闭环与可追溯</h3>
+<ul><li>接单、状态、备注全部落库；</li><li>备注写入任务时间线；</li><li>报告能回答“谁在什么时候做了什么”。</li></ul>
+<h3>亮点 6：工程可复现</h3>
+<ul><li>一条命令启动，前后端同源；</li><li>20 条评测 + 全量测试 + 冒烟流程；</li><li>Git 提交与合并记录完整；</li><li>地图、解析、Agent、管理员都有验证证据。</li></ul>
+<hr>
+<h2>6. 关键流程（答辩可讲）</h2>
+<h3>6.1 任务创建</h3>
+<pre><code>用户输入：从教三楼取3份实验材料，送到科研楼、教四楼和学一公寓，教四楼优先，16:00前完成。
+  ↓
+规则/DeepSeek 解析：取货=教三楼；站点=3；教四楼优先；截止 16:00
+  ↓
+缺字段检查：齐全 → 允许创建
+  ↓
+写入任务、站点；记录“任务规划 Agent”痕迹</code></pre>
+<h3>6.2 计划与执行</h3>
+<pre><code>生成计划：教四楼（优先）→ 学一公寓 → 科研楼；约 8 分钟
+  ↓
+开始 → 确认取货 → 模拟推进/人工到达
+  ↓
+逐站确认交付 → 完成
+  ↓
+报告：完成率、计划版本、Agent 调用次数</code></pre>
+<h3>6.3 异常与重规划</h3>
+<pre><code>用户在地图选一条路 → 上报“施工封闭”/上传照片
+  ↓
+道路观察 Agent 给候选 → 人工确认
+  ↓
+写入路况（可设有效期）
+  ↓
+调度复盘 Agent 重规划：保留已完成站点，只排剩余
+  ↓
+不可达站点明确提示；计划版本 +1</code></pre>
+<h3>6.4 上游语义接入</h3>
+<pre><code>上游消息（结构化）→ 校验 → 先停车
+  ↓
+道路观察 Agent 整理判断 → 调度复盘 Agent 决策
+  ↓
+observe / wait / local_avoid / replan / continue
+  ↓
+路线可行且允许恢复 → 自动放行；否则保持停车</code></pre>
+<hr>
+<h2>7. 码道应用说明</h2>
+<p>开发过程中使用华为云码道（CodeArts）完成以下工作：</p>
+<table><thead><tr><th>阶段</th><th>码道做了什么</th><th>产出</th></tr></thead><tbody><tr><td>需求理解</td><td>解析两份方案 docx，提取验收标准、技术约束、时间表</td><td>需求清单、边界说明</td></tr><tr><td>代码审查</td><td>审查已有前后端代码，发现前端构建链路冲突、地图字段遗漏</td><td>修复方案</td></tr><tr><td>功能开发</td><td>实现逐项补问、Agent 痕迹、管理员视图、地图扩展</td><td>前后端代码</td></tr><tr><td>数据处理</td><td>解析队友 <code>structure.json</code>，把 80 个地点接入路网</td><td>地图 JSON、预览 SVG</td></tr><tr><td>测试</td><td>生成 ASGI 全链路测试、20 条解析评测、合并回归</td><td>测试脚本与结果</td></tr><tr><td>工程化</td><td>README、启动脚本、<code>.gitignore</code>、<code>.env</code> 加载</td><td>可复现启动包</td></tr><tr><td>Git 合并</td><td>拉取队友 <code>zzz</code> 分支，解决 <code>db.py</code>/<code>service.py</code> 冲突</td><td>合并后的 main</td></tr><tr><td>文档</td><td>生成项目总结、界面预览、答辩素材</td><td>Markdown + HTML</td></tr></tbody></table>
+<p><strong>使用原则：</strong></p>
+<ul><li>AI 生成的代码必须经过编译、测试和人工确认；</li><li>模型输出不能直接改任务状态或路况，必须人工确认；</li><li>不把关键词规则冒充模型调用，痕迹中明确标注解析方式；</li><li>不虚构“效率提升百分比”，用可复现的测试结果说话。</li></ul>
+<p><strong>PPT 建议素材：</strong></p>
+<ul><li>码道对话截图（需求拆解、代码修改、测试修复）；</li><li>Agent 痕迹截图（<code>解析=llm:deepseek-chat</code>）；</li><li>测试输出截图（20/20、pytest 通过）；</li><li>Git 提交记录截图（合并队友分支）。</li></ul>
+<hr>
+<h2>8. 验证结果</h2>
+<table><thead><tr><th>检查</th><th>结果</th></tr></thead><tbody><tr><td>地图地点</td><td>80 个地点 + 6 个校门</td></tr><tr><td>路网</td><td>217 节点 / 261 段</td></tr><tr><td>地点连通性</td><td>80 个地点两两可达</td></tr><tr><td>规则解析 20 条</td><td>20/20</td></tr><tr><td>DeepSeek 20 条</td><td>20/20（18 模型 + 2 规则兜底）</td></tr><tr><td>前端 TypeScript</td><td>通过</td></tr><tr><td>前端构建</td><td>11 个文件成功</td></tr><tr><td>后端语法</td><td>通过</td></tr><tr><td>全量测试</td><td>通过（含语义桥、可见性、自动恢复、管理员复核）</td></tr><tr><td>仓库</td><td><code>f8cf94b</code>，已推送 GitHub main</td></tr></tbody></table>
+<hr>
+<h2>9. 边界与未完成</h2>
+<h3>9.1 明确边界</h3>
+<ul><li>不做自动驾驶，不控制真实车辆；</li><li>局部绕行是模拟策略，不做真实轨迹碰撞检测；</li><li>路况来自人工上报或上游消息，不是实时交通数据；</li><li>地图与距离为示意估算，未实地测绘；</li><li>模拟任务与真实任务隔离，模拟结果不计入真实配送成果。</li></ul>
+<h3>9.2 未完成</h3>
+<table><thead><tr><th>项目</th><th>状态</th><th>计划</th></tr></thead><tbody><tr><td>照片上传 + 视觉异常分析</td><td>未完成（唯一业务缺口）</td><td>上传 → 视觉候选 → 人工确认；无视觉 key 时人工选择</td></tr><tr><td>真实用户试用记录</td><td>未开始</td><td>至少 1 位非队员独立完成一次任务</td></tr><tr><td>docs 证据目录</td><td>部分完成</td><td>补 requirements / architecture / api-contract / 测试报告</td></tr><tr><td>管理员逐站交付</td><td>当前边界</td><td>可选优化</td></tr></tbody></table>
+<hr>
+<h2>10. PPT 页面规划（建议 13 页）</h2>
+<table><thead><tr><th>页码</th><th>标题</th><th>核心内容</th><th>建议素材</th></tr></thead><tbody><tr><td>1</td><td>封面</td><td>CampusPilot 校园低速配送任务 Agent</td><td>地图截图 + 标题</td></tr><tr><td>2</td><td>场景背景</td><td>校园配送痛点：多站点、封路、信息分散</td><td>痛点表格</td></tr><tr><td>3</td><td>方案总览</td><td>一句话定位 + 业务闭环图</td><td>闭环流程图</td></tr><tr><td>4</td><td>功能架构</td><td>交互层 / API / Agent / 确定性引擎 / 数据层</td><td>架构图</td></tr><tr><td>5</td><td>任务理解</td><td>规则 + DeepSeek + 逐项补问 + 20/20</td><td>解析界面截图</td></tr><tr><td>6</td><td>地图与路网</td><td>80 地点、217 节点、261 段、真实底图</td><td>地图截图</td></tr><tr><td>7</td><td>计划与执行</td><td>排序、路线、状态机、模拟/真实隔离</td><td>执行面板截图</td></tr><tr><td>8</td><td>异常与重规划</td><td>封路 → 保留已完成 → 重排剩余</td><td>重规划前后对比</td></tr><tr><td>9</td><td>实时语义接入</td><td>先停车、观察/等待/绕行/重规划、场景隔离</td><td>语义面板截图</td></tr><tr><td>10</td><td>多 Agent 协作</td><td>三 Agent + 痕迹 + 时间线</td><td>Agent 时间线截图</td></tr><tr><td>11</td><td>管理员与报告</td><td>接单、状态、备注、报告指标</td><td>管理员页截图</td></tr><tr><td>12</td><td>码道应用</td><td>需求解析、开发、测试、合并、文档</td><td>码道对话截图</td></tr><tr><td>13</td><td>验证与边界</td><td>测试结果、明确边界、后续规划</td><td>测试输出 / 路线图</td></tr></tbody></table>
+<hr>
+<h2>11. 三分钟演示脚本</h2>
+<ol><li><strong>打开工作台</strong>：输入“从教三楼取3份材料送到科研楼、教四楼和学一公寓，教四楼优先，16:00前完成”，点解析；</li><li><strong>展示补问</strong>：故意删掉物品，展示“第 N 站缺少物品”卡片，补全后再创建；</li><li><strong>生成计划</strong>：展示优先站点前置、地图路线、ETA；</li><li><strong>执行</strong>：开始 → 确认取货 → 模拟到达 → 确认交付；</li><li><strong>异常</strong>：地图选中一条路，上报“施工封闭”，展示 Agent 痕迹和重规划；强调“已完成站点保留”；</li><li><strong>管理员</strong>：切到管理员视图，接单、写备注；</li><li><strong>报告</strong>：展示完成率、计划版本、Agent 调用；</li><li><strong>收尾</strong>：明确“不做自动驾驶、模拟与真实隔离、路况为人工/上游上报”。</li></ol>
+<hr>
+<h2>12. 答辩常见问题</h2>
+<p><strong>Q1：这和自动驾驶/智能车有什么区别？</strong></p>
+<p>A：我们不控制车辆，也不做局部实时避障。系统解决的是任务级问题：哪条路封了、剩余站点怎么排、哪些站点不可达。局部绕行只存在于模拟演示。</p>
+<p><strong>Q2：多 Agent 是不是只是分了几个函数？</strong></p>
+<p>A：三个 Agent 有明确职责、工具和输入输出，每次调用写入 <code>agent_traces</code>，页面和报告可查；推理归 Agent，路径、状态、指标由代码计算。不是三个名字，也不是三个聊天窗口。</p>
+<p><strong>Q3：为什么不用 LangChain / ReAct / 微调？</strong></p>
+<p>A：业务确定性高、流程短，直接函数编排更透明、可复现；20 条样例是测试集不是训练集；微调成本和风险高。我们把精力放在真实模型调用、失败兜底、可核查痕迹和测试上。</p>
+<p><strong>Q4：地图数据哪来的？</strong></p>
+<p>A：团队标注的校园示意图 + 队友 <code>map_design</code> 结构化数据；地点和路网是示意，未实地测绘，页面有明确声明。</p>
+<p><strong>Q5：模型失败/断网怎么办？</strong></p>
+<p>A：自动回落规则解析并标注；<code>/api/health</code> 可看模型是否配置；接口测试默认禁用外部模型，避免依赖网络。</p>
+<p><strong>Q6：封路要天天更新吗？</strong></p>
+<p>A：不需要。事件驱动 + 有效期，到期自动失效；管理员可续期/解除；没有上报时默认通行。</p>
+<p><strong>Q7：照片视觉分析还没做，怎么解释？</strong></p>
+<p>A：这是唯一剩余功能缺口；文字异常与上游语义已完整跑通。下一步接上传 + 视觉候选 + 人工确认，不训练模型，用现成多模态接口。</p>
+<hr>
+<h2>13. 一句话收尾</h2>
+<blockquote>CampusPilot 把“校园配送”从口头和纸单，变成<strong>可解析、可规划、可执行、可重规划、可追溯</strong>的任务系统；它不替人开车，但替人把复杂情况想清楚。</blockquote>
+</body>
+</html>

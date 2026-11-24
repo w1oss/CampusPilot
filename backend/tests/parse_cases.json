@@ -84,9 +84,9 @@
     {
       "id": "case07",
       "note": "未知配送地点：应提示该地点不在白名单",
-      "text": "从教三楼取文件送到科研楼和体育馆。",
+      "text": "从教三楼取文件送到科研楼和五道口。",
       "expect": {
-        "missing": ["unknown_location:体育馆"]
+        "missing": ["unknown_location:五道口"]
       }
     },
     {

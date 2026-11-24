@@ -8,6 +8,7 @@ export interface MapNode {
   name: string
   aliases?: string[]
   kind: 'location' | 'junction' | 'waypoint'
+  category?: 'teaching' | 'dorm' | 'service' | 'facility' | 'gate' | 'other'
   x: number
   y: number
 }

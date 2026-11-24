@@ -2,6 +2,7 @@ import uuid
 from typing import Any
 
 from .db import dumps, loads, now_iso
+from .simulator import is_local_box
 
 AGENTS: dict[str, dict[str, Any]] = {
     "task_planner": {
@@ -17,6 +18,41 @@ AGENTS: dict[str, dict[str, Any]] = {
         "tools": ["replan_task", "update_status", "export_report"],
     },
 }
+
+
+def observe_road_semantics(event: dict[str, Any]) -> dict[str, Any]:
+    """Road observer: ground structured upstream evidence, without inventing facts.
+
+    This deterministic adapter is explicitly labelled; it does not pretend to call
+    another LLM after the upstream vision/LLM has already produced semantics.
+    """
+    trusted = event["confidence"] >= 0.65
+    status = event["passability"] if trusted else "unknown"
+    return {
+        **event,
+        "effective_status": status,
+        "active": event["lifecycle"] != "cleared" and status != "open",
+        "risk": "high" if status == "blocked" else "medium" if status == "congested" else "unknown",
+        "analyzer": "structured_semantic_adapter",
+    }
+
+
+def decide_dispatch(snapshot: dict[str, Any], hazards: list[dict[str, Any]]) -> dict[str, str]:
+    """Dispatcher chooses actions; graph search and state transitions stay in tools."""
+    if snapshot["task"]["status"] in ("ready", "completed", "cancelled"):
+        return {"action": "observe", "reason": "已记录环境信息，任务尚未执行或已经结束"}
+    if any(h["effective_status"] == "unknown" for h in hazards):
+        return {"action": "wait", "reason": "当前路线存在尚未确认的障碍，等待上游复查"}
+    blocked = [h for h in hazards if h["effective_status"] == "blocked" and not is_local_box(h)]
+    if any(h["category"] == "pedestrian" and (h.get("expected_duration_s") or 0) <= 180 and h.get("age_seconds", 0) < 10 for h in blocked):
+        return {"action": "wait", "reason": "前方行人横穿，暂停并等待解除消息"}
+    if blocked:
+        return {"action": "replan", "reason": "剩余路线受阻，调用规划工具从当前位置绕行"}
+    if any(h["effective_status"] == "congested" for h in hazards):
+        return {"action": "replan", "reason": "剩余路线拥堵，重新比较配送路线和时间成本"}
+    if any(is_local_box(h) for h in hazards):
+        return {"action": "local_avoid", "reason": "前方小纸箱，在原路段内用小弧线避让，保持配送路线"}
+    return {"action": "continue", "reason": "当前剩余路线没有通行障碍"}
 
 
 def summarize(text: str, limit: int = 120) -> str:

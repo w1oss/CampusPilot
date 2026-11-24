@@ -17,10 +17,11 @@ export default function App() {
   const [bundle, setBundle] = useState<Bundle | null>(null)
   const [view, setView] = useState<View>('workspace')
   const [error, setError] = useState<string | null>(null)
-  const [health, setHealth] = useState<{ llm_configured: boolean; map_version: string } | null>(null)
+  const [health, setHealth] = useState<{ llm_configured: boolean; map_version: string; semantic_bridge_enabled: boolean } | null>(null)
   const [autoSim, setAutoSim] = useState(false)
   const [simSpeed, setSimSpeed] = useState(40)
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null)
+  const [selectedFraction, setSelectedFraction] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -42,9 +43,39 @@ export default function App() {
   const taskId = bundle?.task.id
   const taskStatus = bundle?.task.status
   const planVersion = bundle?.task.plan_version
+  const bridgeEnabled = health?.semantic_bridge_enabled === true
+
+  // Polling only reads state. Closing/navigating away from the page never owns
+  // or advances the vehicle when the backend runtime is enabled.
+  useEffect(() => {
+    if (!bridgeEnabled || !taskId) return
+    let cancelled = false
+    let timer: number | undefined
+    async function poll() {
+      try {
+        const next = await api.getTask(taskId!)
+        if (cancelled) return
+        setBundle(next)
+        setAutoSim(!!next.runtime?.enabled)
+        if (next.runtime) setSimSpeed(next.runtime.speed_mps)
+      } catch (err) {
+        if (cancelled) return
+        if (err instanceof ApiError && err.status === 404) {
+          setBundle(null)
+          setAutoSim(false)
+          setError('该任务已被删除，已退出任务页面')
+          return
+        }
+        setError(err instanceof ApiError ? err.message : '位置更新失败')
+      }
+      if (!cancelled) timer = window.setTimeout(poll, 200)
+    }
+    timer = window.setTimeout(poll, 200)
+    return () => { cancelled = true; if (timer) window.clearTimeout(timer) }
+  }, [bridgeEnabled, taskId])
 
   useEffect(() => {
-    if (!autoSim || !taskId || taskStatus !== 'in_progress') return
+    if (bridgeEnabled || !autoSim || !taskId || taskStatus !== 'in_progress') return
     let cancelled = false
     let timer: number | undefined
 
@@ -71,14 +102,32 @@ export default function App() {
       cancelled = true
       if (timer) window.clearTimeout(timer)
     }
-  }, [autoSim, taskId, taskStatus, planVersion, simSpeed])
+  }, [bridgeEnabled, autoSim, taskId, taskStatus, planVersion, simSpeed])
+
+  async function configureRuntime(enabled: boolean, speed: number) {
+    if (!bridgeEnabled || !taskId) {
+      setAutoSim(enabled)
+      setSimSpeed(speed)
+      return
+    }
+    try {
+      const source = bundle?.upstream_simulation
+      const next = await api.setRuntime(taskId, enabled, speed, source?.configured ? source.enabled : enabled, source?.category || 'pedestrian')
+      setBundle(next)
+      setAutoSim(!!next.runtime?.enabled)
+      setSimSpeed(speed)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '后台模拟设置失败')
+    }
+  }
 
   async function openTask(id: string) {
     try {
       const loaded = await api.getTask(id)
       setBundle(loaded)
       setSelectedEdge(null)
-      setAutoSim(false)
+      setAutoSim(!!loaded.runtime?.enabled)
+      if (loaded.runtime) setSimSpeed(loaded.runtime.speed_mps)
       setView('workspace')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '无法打开任务')
@@ -94,7 +143,8 @@ export default function App() {
 
   function refresh(next: Bundle) {
     setBundle(next)
-    if (next.task.status !== 'in_progress') setAutoSim(false)
+    if (bridgeEnabled) setAutoSim(!!next.runtime?.enabled)
+    else if (next.task.status !== 'in_progress') setAutoSim(false)
   }
 
   if (loading) {
@@ -165,7 +215,10 @@ export default function App() {
               map={map}
               bundle={bundle}
               selectedEdgeId={selectedEdge}
-              onSelectEdge={setSelectedEdge}
+              onSelectEdge={(edge, fraction) => {
+                setSelectedEdge(edge)
+                setSelectedFraction(fraction ?? null)
+              }}
             />
             <div className="workflow-strip">
               <span className="workflow-step">1 描述需求</span>
@@ -182,11 +235,16 @@ export default function App() {
               map={map}
               bundle={bundle}
               selectedEdgeId={selectedEdge}
+              selectedFraction={selectedFraction}
               autoSim={autoSim}
               simSpeed={simSpeed}
-              onToggleAuto={setAutoSim}
-              onSpeedChange={setSimSpeed}
-              onSelectEdge={setSelectedEdge}
+              bridgeEnabled={bridgeEnabled}
+              onToggleAuto={(enabled) => { void configureRuntime(enabled, simSpeed) }}
+              onSpeedChange={(speed) => { void configureRuntime(autoSim, speed) }}
+              onSelectEdge={(edge, fraction) => {
+                setSelectedEdge(edge)
+                setSelectedFraction(fraction ?? null)
+              }}
               onRefresh={refresh}
               onOpenReport={() => setView('report')}
               onError={setError}

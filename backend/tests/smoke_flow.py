@@ -1,6 +1,10 @@
 import sys
+import os
 from pathlib import Path
 
+# This script resets its database. Never point it at the application's live DB,
+# even if the caller's environment already defines CAMPUSPILOT_DB.
+os.environ["CAMPUSPILOT_DB"] = str(Path(__file__).resolve().parent.parent / "var" / "test_smoke.db")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import service
@@ -12,7 +16,8 @@ TEXT = "从计算机学院取3份实验材料，分别送到科研楼、实验�
 
 def reset() -> None:
     with get_conn() as conn:
-        for table in ("action_log", "task_events", "execution_state", "road_events", "plans", "stops", "tasks"):
+        # Scene knowledge survives task completion, so reset it explicitly too.
+        for table in ("road_known", "obstacle_truth", "action_log", "task_events", "execution_state", "road_events", "plans", "stops", "tasks"):
             conn.execute(f"DELETE FROM {table}")
 
 

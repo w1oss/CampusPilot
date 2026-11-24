@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
 class StopDraft(BaseModel):
@@ -32,6 +32,7 @@ class ParseResponse(BaseModel):
 
 class CreateTaskRequest(BaseModel):
     mode: Literal["real", "sim"] = "sim"
+    scene_id: str | None = None
     pickup_location_id: str
     stops: list[StopDraft]
     deadline: str | None = None
@@ -75,11 +76,15 @@ class ActionRequest(BaseModel):
 class ReplanRequest(BaseModel):
     request_id: str = Field(min_length=8, max_length=64)
     reason: str = ""
+    plan_version: int = 0
 
 
 class RoadEventRequest(BaseModel):
     edge_id: str
+    edge_fraction: float | None = Field(default=None, ge=0, le=1)
     status: Literal["open", "congested", "blocked"]
+    scene_id: str = "sim_default"
+    authority: Literal["normal", "hard"] = "normal"
     source: Literal["user_text", "user_photo", "model_candidate", "admin"] = "user_text"
     confirmed_by: str = Field(default="user", max_length=64)
     note: str = ""
@@ -93,3 +98,31 @@ class SimTickRequest(BaseModel):
 
 class SeedRequest(BaseModel):
     reset: bool = False
+
+
+class SemanticEventRequest(BaseModel):
+    """Already interpreted upstream output. Fractions run from edge.from to edge.to."""
+
+    model_config = ConfigDict(extra="forbid")
+    event_id: str = Field(min_length=8, max_length=100)
+    task_id: str = Field(min_length=1, max_length=64)
+    obstacle_id: str = Field(min_length=1, max_length=64)
+    revision: int = Field(ge=1)
+    map_version: str
+    source: Literal["mock_vision_llm", "vision_llm"] = "mock_vision_llm"
+    observed_at: AwareDatetime | None = None
+    lifecycle: Literal["observed", "cleared"] = "observed"
+    edge_id: str
+    edge_fraction: float | None = Field(default=None, ge=0, le=1)
+    category: Literal["construction", "pedestrian", "crowd", "box", "barrier", "other"] = "other"
+    passability: Literal["open", "congested", "blocked", "unknown"]
+    confidence: float = Field(default=1, ge=0, le=1)
+    expected_duration_s: float | None = Field(default=None, ge=0, le=86400)
+    summary: str = Field(min_length=1, max_length=1000)
+
+
+class SimRuntimeRequest(BaseModel):
+    enabled: bool
+    speed_mps: float = Field(default=40, gt=0, le=1000)
+    auto_upstream: bool = False
+    upstream_category: Literal["pedestrian", "construction", "crowd", "box", "barrier"] = "pedestrian"

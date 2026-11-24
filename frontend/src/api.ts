@@ -6,14 +6,17 @@ import type {
   Report,
   StopDraft,
   TaskSummary,
+  SemanticEvent,
 } from './types'
 
 export class ApiError extends Error {
   code: string
+  status?: number
 
-  constructor(code: string, message: string) {
+  constructor(code: string, message: string, status?: number) {
     super(message)
     this.code = code
+    this.status = status
   }
 }
 
@@ -33,7 +36,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!response.ok) {
     const data = payload as { code?: string; message?: string; detail?: string }
-    throw new ApiError(data.code || `http_${response.status}`, data.message || data.detail || `请求失败（${response.status}）`)
+    throw new ApiError(data.code || `http_${response.status}`, data.message || data.detail || `请求失败（${response.status}）`, response.status)
   }
   return payload as T
 }
@@ -43,7 +46,7 @@ export function newRequestId(): string {
 }
 
 export const api = {
-  health: () => request<{ status: string; map_version: string; llm_configured: boolean; llm_model: string | null; data_notice: string }>('/api/health'),
+  health: () => request<{ status: string; map_version: string; llm_configured: boolean; llm_model: string | null; data_notice: string; semantic_bridge_enabled: boolean }>('/api/health'),
   map: () => request<CampusMap>('/api/map'),
   parse: (text: string) =>
     request<ParseResult>('/api/tasks/parse', { method: 'POST', body: JSON.stringify({ text }) }),
@@ -71,13 +74,31 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ seconds, speed_mps: speedMps ?? null }),
     }),
+  setRuntime: (id: string, enabled: boolean, speedMps: number, autoUpstream = false, upstreamCategory = 'pedestrian') =>
+    request<Bundle>(`/api/tasks/${id}/sim/runtime`, { method: 'POST', body: JSON.stringify({ enabled, speed_mps: speedMps, auto_upstream: autoUpstream, upstream_category: upstreamCategory }) }),
+  clearUpstream: (id: string) =>
+    request<{ accepted: boolean; duplicate: boolean; decision: { action: string; reason: string }; bundle: Bundle }>(
+      `/api/tasks/${id}/sim/upstream/clear`, { method: 'POST' },
+    ),
+  semanticEvent: (payload: SemanticEvent) =>
+    request<{ accepted: boolean; duplicate: boolean; decision: { action: string; reason: string }; bundle: Bundle }>(
+      '/api/semantic-events', { method: 'POST', body: JSON.stringify(payload) },
+    ),
   report: (id: string) => request<Report>(`/api/tasks/${id}/report`),
   roadEvents: () => request<{ road_events: Bundle['road_events']; road_status: Record<string, string> }>('/api/road-events'),
-  createRoadEvent: (payload: { edge_id: string; status: string; source: string; confirmed_by: string; note: string }) =>
+  createRoadEvent: (payload: { edge_id: string; edge_fraction?: number | null; status: string; source: string; confirmed_by: string; note: string; authority?: string; scene_id?: string }) =>
     request<{ id: string; road_status: Record<string, string> }>('/api/road-events', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  resetScene: (sceneId: string) =>
+    request<{ reset: boolean; keep_admin: boolean; scene: { id: string; kind: string; virtual_seconds: number } }>(
+      `/api/scenes/${sceneId}/reset`, { method: 'POST' },
+    ),
+  clearTruth: (sceneId: string, obstacleId: string) =>
+    request<{ scene_id: string; obstacle_id: string; present: number; known_status: string | null; known_active: boolean; notice: string }>(
+      `/api/scenes/${sceneId}/truth/${encodeURIComponent(obstacleId)}/clear`, { method: 'POST' },
+    ),
   analyze: (edgeId: string, text: string, taskId?: string) =>
     request<{ edge_name: string; candidate_status: string | null; risk: string; analyzer: string; notice: string }>(
       '/api/road-events/analyze',

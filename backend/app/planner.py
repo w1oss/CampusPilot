@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from copy import deepcopy
 from datetime import datetime, time, timedelta
 from itertools import permutations
 from typing import Any
@@ -6,6 +7,71 @@ from typing import Any
 from .config import DEFAULT_DWELL_SECONDS, SPEED_MPS
 from .graph import PathResult, dijkstra
 from .mapdata import MapData, node_name
+from .simulator import split_polyline, is_local_box
+
+
+def plan_from_position(
+    mapdata: MapData,
+    task: dict[str, Any],
+    stops: list[dict[str, Any]],
+    road_status: dict[str, str],
+    start: datetime,
+    state: dict[str, Any],
+    obstacles: list[dict[str, Any]],
+    baseline_status: dict[str, str],
+) -> tuple["PlanResult", dict[str, Any] | None]:
+    """Plan through a directed virtual start without changing the cached map.
+
+    The first temporary segment is mapped back to a real edge for execution.
+    A blocked segment can only be escaped on the side containing the car.
+    """
+    edge = mapdata.edges.get(state.get("current_edge_id"))
+    progress = float(state.get("edge_progress") or 0)
+    if edge is None or progress <= 1e-6:
+        return build_plan(mapdata, task, stops, road_status, start, state.get("last_node_id")), None
+    fraction = progress if state["last_node_id"] == edge["from"] else 1 - progress
+    local_map = deepcopy(mapdata)
+    anchor = "__current_position"
+    local_map.nodes[anchor] = {"id": anchor, "name": "当前位置", "kind": "waypoint", "x": state["position_x"], "y": state["position_y"]}
+    before, after = split_polyline([list(p) for p in edge["polyline"]], fraction)
+    before[-1] = [state["position_x"], state["position_y"]]
+    after[0] = before[-1]
+    blocks = [o for o in obstacles if o["edge_id"] == edge["id"] and o["effective_status"] in ("blocked", "unknown") and not is_local_box(o)]
+    whole_block = baseline_status.get(edge["id"], edge.get("base_status", "open")) == "blocked"
+    seeds: dict[str, dict[str, Any]] = {}
+    statuses = dict(road_status)
+    for backwards, target, geometry, distance_fraction in (
+        (True, edge["from"], list(reversed(before)), fraction),
+        (False, edge["to"], after, 1 - fraction),
+    ):
+        if backwards and not edge.get("bidirectional", True):
+            continue
+        target_fraction = 0 if backwards else 1
+        if whole_block or any(
+            o.get("edge_fraction") is None
+            or min(fraction, target_fraction) - 1e-6 <= o["edge_fraction"] <= max(fraction, target_fraction) + 1e-6
+            for o in blocks
+        ):
+            continue
+        connector = "__pose_back" if backwards else "__pose_forward"
+        local_map.edges[connector] = {
+            "id": connector, "from": anchor, "to": target, "bidirectional": False,
+            "distance_m": edge["distance_m"] * distance_fraction,
+            "polyline": geometry, "base_status": "open",
+        }
+        statuses[connector] = "congested" if road_status.get(edge["id"]) == "congested" else "open"
+        seeds[connector] = {
+            "last_node_id": edge["to"] if backwards else edge["from"],
+            "edge_progress": 1 - fraction if backwards else fraction,
+            "current_edge_id": edge["id"],
+        }
+    result = build_plan(local_map, task, stops, statuses, start, anchor)
+    first = result.route_edge_ids[0] if result.route_edge_ids else None
+    seed = seeds.get(first)
+    if seed:
+        result.route_edge_ids[0] = edge["id"]
+    result.assumptions.append("本次从车辆实时位置规划，当前位置不回退到上一个路口。")
+    return result, seed
 
 
 @dataclass

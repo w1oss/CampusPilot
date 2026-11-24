@@ -7,7 +7,7 @@ interface Props {
   map: CampusMap
   bundle: Bundle | null
   selectedEdgeId: string | null
-  onSelectEdge: (edgeId: string) => void
+  onSelectEdge: (edgeId: string, fraction?: number | null) => void
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -31,6 +31,41 @@ function toPoints(polyline: [number, number][]): string {
   return polyline.map(([x, y]) => `${x},${y}`).join(' ')
 }
 
+function fractionAt(edge: MapEdge, event: any): number | null {
+  const svg = event.currentTarget.ownerSVGElement as SVGSVGElement | null
+  const ctm = event.currentTarget.getScreenCTM() as DOMMatrix | null
+  if (!svg || !ctm) return null
+  const point = svg.createSVGPoint()
+  point.x = event.clientX
+  point.y = event.clientY
+  const local = point.matrixTransform(ctm.inverse())
+  const polyline = edge.polyline
+  let total = 0
+  for (let index = 0; index < polyline.length - 1; index += 1) {
+    total += Math.hypot(polyline[index + 1][0] - polyline[index][0], polyline[index + 1][1] - polyline[index][1])
+  }
+  if (total <= 0) return 0
+  let walked = 0
+  let best = { distance: Infinity, fraction: 0 }
+  for (let index = 0; index < polyline.length - 1; index += 1) {
+    const [ax, ay] = polyline[index]
+    const [bx, by] = polyline[index + 1]
+    const dx = bx - ax
+    const dy = by - ay
+    const length = Math.hypot(dx, dy)
+    const lengthSq = dx * dx + dy * dy
+    const ratio = lengthSq ? Math.max(0, Math.min(1, ((local.x - ax) * dx + (local.y - ay) * dy) / lengthSq)) : 0
+    const px = ax + dx * ratio
+    const py = ay + dy * ratio
+    const distance = Math.hypot(local.x - px, local.y - py)
+    if (distance < best.distance) {
+      best = { distance, fraction: (walked + length * ratio) / total }
+    }
+    walked += length
+  }
+  return best.fraction
+}
+
 export default function CampusMap({ map, bundle, selectedEdgeId, onSelectEdge }: Props) {
   const width = map.coordinate_system.width
   const height = map.coordinate_system.height
@@ -47,6 +82,7 @@ export default function CampusMap({ map, bundle, selectedEdgeId, onSelectEdge }:
   selectRef.current = onSelectEdge
 
   const roadStatus = useMemo(() => bundle?.road_status || {}, [bundle?.road_status])
+  const roadMarks = useMemo(() => bundle?.road_marks || {}, [bundle?.road_marks])
   const deliveredIds = useMemo(
     () => new Set((bundle?.stops || []).filter((stop) => stop.status === 'delivered').map((stop) => stop.location_id)),
     [bundle?.stops],
@@ -100,7 +136,7 @@ export default function CampusMap({ map, bundle, selectedEdgeId, onSelectEdge }:
             strokeLinecap="round"
             strokeLinejoin="round"
             style={{ cursor: 'pointer' }}
-            onClick={() => selectRef.current(edge.id)}
+            onClick={(event) => selectRef.current(edge.id, fractionAt(edge, event))}
           >
             <title>{`${edge.name}（${edge.id}）· 约 ${edge.distance_m} 米`}</title>
           </polyline>
@@ -112,7 +148,7 @@ export default function CampusMap({ map, bundle, selectedEdgeId, onSelectEdge }:
 
   const statusLayer = useMemo(() => {
     const marked = edges.filter((edge) => {
-      const status = roadStatus[edge.id] || edge.base_status
+      const status = roadMarks[edge.id]?.status || roadStatus[edge.id] || edge.base_status
       return status !== 'open' || edge.id === selectedEdgeId
     })
     if (marked.length === 0) {
@@ -121,24 +157,56 @@ export default function CampusMap({ map, bundle, selectedEdgeId, onSelectEdge }:
     return (
       <g pointerEvents="none">
         {marked.map((edge) => {
-          const status = roadStatus[edge.id] || edge.base_status
+          const mark = roadMarks[edge.id]
+          const status = mark?.status || roadStatus[edge.id] || edge.base_status
           const selected = edge.id === selectedEdgeId
+          const label = mark?.authority === 'hard'
+            ? '强制'
+            : mark?.sources?.includes('admin') && mark?.sources?.includes('machine')
+              ? '人工+机器'
+              : mark?.sources?.includes('admin')
+                ? '人工'
+                : mark?.sources?.includes('machine')
+                  ? '机器'
+                  : ''
+          const position = mark?.position_known ? '已定位' : '位置未知/整段'
+          const mid = edge.polyline[Math.floor(edge.polyline.length / 2)]
           return (
-            <polyline
-              key={edge.id}
-              points={toPoints(edge.polyline)}
-              fill="none"
-              stroke={selected ? '#1e6fa8' : STATUS_COLOR[status] || STATUS_COLOR.open}
-              strokeWidth={selected ? scaleValue(7) : scaleValue(6)}
-              strokeDasharray={status === 'blocked' ? `${scaleValue(10)} ${scaleValue(7)}` : undefined}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            <g key={edge.id}>
+              <polyline
+                points={toPoints(edge.polyline)}
+                fill="none"
+                stroke={selected ? '#1e6fa8' : STATUS_COLOR[status] || STATUS_COLOR.open}
+                strokeWidth={selected ? scaleValue(7) : scaleValue(6)}
+                strokeDasharray={status === 'blocked' ? `${scaleValue(10)} ${scaleValue(7)}` : undefined}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <title>{`${edge.name}（${edge.id}）· ${status} · ${label || '道路状态'} · ${position}`}</title>
+              </polyline>
+              {label && status !== 'open' ? (
+                <g transform={`translate(${mid[0]}, ${mid[1] - scaleValue(8)})`}>
+                  <rect
+                    x={-label.length * scaleValue(5)}
+                    y={-scaleValue(7)}
+                    width={label.length * scaleValue(10)}
+                    height={scaleValue(14)}
+                    rx={scaleValue(3)}
+                    fill="#fffdf7"
+                    stroke={status === 'blocked' ? '#cf4b3a' : '#e09b3d'}
+                    strokeWidth={scaleValue(0.8)}
+                  />
+                  <text x={0} y={scaleValue(1)} textAnchor="middle" fontSize={scaleValue(9)} fill="#7a2e26" fontWeight={600}>
+                    {label}
+                  </text>
+                </g>
+              ) : null}
+            </g>
           )
         })}
       </g>
     )
-  }, [edges, roadStatus, selectedEdgeId, scale])
+  }, [edges, roadMarks, roadStatus, selectedEdgeId, scale])
 
   return (
     <div className="map-shell">
@@ -181,7 +249,7 @@ export default function CampusMap({ map, bundle, selectedEdgeId, onSelectEdge }:
           baseLayer
         )}
         {hitLayer}
-        {statusLayer}
+
 
         {routePolyline.length > 1 ? (
           <>
@@ -205,6 +273,20 @@ export default function CampusMap({ map, bundle, selectedEdgeId, onSelectEdge }:
               className="route-dash"
             />
           </>
+        ) : null}
+        {statusLayer}
+        {bundle?.local_avoidance ? (
+          <g pointerEvents="none" aria-label="纸箱局部避让">
+            <polyline points={toPoints(bundle.local_avoidance.polyline)} fill="none" stroke="#fffdf7" strokeWidth={scaleValue(5)} />
+            <polyline points={toPoints(bundle.local_avoidance.polyline)} fill="none" stroke="#8052ad" strokeWidth={scaleValue(2)} strokeLinecap="round">
+              <title>纸箱局部避让：沿小弧线通过，配送路线不变</title>
+            </polyline>
+            {bundle.local_avoidance.obstacles.map((point, index) => (
+              <rect key={index} x={point.x - 4} y={point.y - 4} width={8} height={8} fill="#b77732" stroke="#fffdf7" strokeWidth={1}>
+                <title>纸箱（局部障碍，道路保持可通行）</title>
+              </rect>
+            ))}
+          </g>
         ) : null}
 
         {nodes.map((node) => {

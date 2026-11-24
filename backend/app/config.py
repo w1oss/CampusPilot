@@ -37,6 +37,24 @@ CONGESTED_FACTOR = float(os.getenv("CAMPUSPILOT_CONGESTED_FACTOR", "2.0"))
 SIM_SPEED_MPS = float(os.getenv("CAMPUSPILOT_SIM_SPEED_MPS", "40.0"))
 DEFAULT_DWELL_SECONDS = float(os.getenv("CAMPUSPILOT_DWELL_SECONDS", "60"))
 
+# Optional upstream adapter; existing manual workflows work with this disabled.
+SEMANTIC_BRIDGE_ENABLED = os.getenv("CAMPUSPILOT_SEMANTIC_BRIDGE", "1").lower() in ("1", "true", "yes")
+SIM_TICK_INTERVAL = max(0.05, float(os.getenv("CAMPUSPILOT_SIM_TICK_INTERVAL", "0.1")))
+SEMANTIC_MAX_AGE_SECONDS = float(os.getenv("CAMPUSPILOT_SEMANTIC_MAX_AGE", "30"))
+# 点击启用模拟源后多久发送第一条危险消息；0 表示立即发送并先停车。
+SIM_UPSTREAM_DELAY_SECONDS = max(0.0, float(os.getenv("CAMPUSPILOT_SIM_UPSTREAM_DELAY", "0")))
+# 自动解除等待时间；0 表示不自动解除，必须人工确认（用于施工围挡）。
+SIM_UPSTREAM_CLEAR_SECONDS = {
+    "pedestrian": max(0.0, float(os.getenv("CAMPUSPILOT_SIM_CLEAR_PEDESTRIAN", "3"))),
+    "crowd": max(0.0, float(os.getenv("CAMPUSPILOT_SIM_CLEAR_CROWD", "30"))),
+    "construction": max(0.0, float(os.getenv("CAMPUSPILOT_SIM_CLEAR_CONSTRUCTION", "0"))),
+}
+SIM_UPSTREAM_EXPECTED_SECONDS = {
+    "pedestrian": 5.0,
+    "crowd": 30.0,
+    "construction": 1800.0,
+}
+
 LLM_BASE_URL = os.getenv("CAMPUSPILOT_LLM_BASE_URL", "")
 LLM_API_KEY = os.getenv("CAMPUSPILOT_LLM_API_KEY", "")
 LLM_MODEL = os.getenv("CAMPUSPILOT_LLM_MODEL", "")

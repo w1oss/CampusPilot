@@ -144,6 +144,50 @@ export interface ExecutionState {
   last_node_id: string | null
   position: { x: number; y: number }
   updated_at: string
+  remaining_edge_ids: string[]
+}
+
+export interface SemanticEvent {
+  event_id: string
+  task_id: string
+  obstacle_id: string
+  revision: number
+  map_version: string
+  source?: 'mock_vision_llm' | 'vision_llm'
+  observed_at?: string
+  lifecycle: 'observed' | 'cleared'
+  edge_id: string
+  edge_fraction?: number | null
+  category: 'construction' | 'pedestrian' | 'crowd' | 'other'
+  passability: 'open' | 'congested' | 'blocked' | 'unknown'
+  confidence?: number
+  expected_duration_s?: number
+  summary: string
+}
+
+export interface SemanticObstacle {
+  handling?: 'local_avoidance' | 'road_status'
+  obstacle_id: string
+  edge_id: string
+  edge_fraction?: number | null
+  category?: string
+  effective_status: string
+  active: boolean
+  summary?: string
+  source?: 'mock_vision_llm' | 'vision_llm' | 'admin'
+  authority?: 'normal' | 'hard'
+  position_known?: boolean
+  clear_evidence?: number
+  observed_at?: string
+}
+
+export interface SimRuntime {
+  enabled: boolean
+  speed_mps: number
+  hold_reason: string
+  auto_resume: boolean
+  emergency_hold?: boolean
+  waiting: string | null
 }
 
 export interface TimelineEntry {
@@ -197,6 +241,7 @@ export interface ReplanDiff {
 }
 
 export interface Bundle {
+  local_avoidance?: { edge_id: string; kind: 'box'; polyline: [number, number][]; obstacles: { x: number; y: number }[] } | null
   task: Task
   stops: Stop[]
   plan: Plan | null
@@ -211,6 +256,11 @@ export interface Bundle {
   map_version: string
   replan_diff?: ReplanDiff
   sim?: { waiting: string | null; arrived_stop_ids: string[] }
+  runtime?: SimRuntime
+  semantic_obstacles?: SemanticObstacle[]
+  road_marks?: Record<string, { status: string; sources: string[]; authority: 'normal' | 'hard'; position_known: boolean }>
+  upstream_simulation?: { enabled: boolean; configured: boolean; category: 'pedestrian' | 'construction' | 'crowd' | 'box' | 'barrier'; phase: number; elapsed: number; generated_count?: number; last_edge_id?: string | null }
+  scene?: { id: string; kind: string; virtual_seconds: number }
 }
 
 export interface TaskSummary {

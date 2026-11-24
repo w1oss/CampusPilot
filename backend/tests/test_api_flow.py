@@ -23,8 +23,13 @@ TEXT = "从计算机学院取3份实验材料，分别送到科研楼、实验�
 def reset() -> None:
     init_db()
     with get_conn() as conn:
-        for table in ("action_log", "task_events", "execution_state", "road_events", "plans", "stops", "tasks"):
+        for table in (
+            "action_log", "task_events", "execution_state", "semantic_events", "semantic_obstacles",
+            "upstream_simulations", "sim_runtime", "road_known", "obstacle_truth", "road_events",
+            "plans", "stops", "tasks",
+        ):
             conn.execute(f"DELETE FROM {table}")
+        conn.execute("UPDATE scenes SET virtual_seconds = 0")
 
 
 def client() -> httpx.AsyncClient:

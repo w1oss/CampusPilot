@@ -1198,7 +1198,7 @@ def sim_tick(task_id: str, seconds: float, speed_mps: float | None = None, *, ru
             "position_y": state["position_y"],
             "_remaining_edges": loads(state["remaining_edge_ids"], []),
         }
-outcome = advance(
+        outcome = advance(
             mapdata, task, stops, working, seconds, speed_mps or SIM_SPEED_MPS,
             get_road_status(conn, task_id), active_obstacles(conn, task_id), baseline_road_status(conn, task_id),
         )

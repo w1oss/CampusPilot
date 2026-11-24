@@ -259,7 +259,7 @@ def _add_missing(conn: sqlite3.Connection, table: str, column: str, definition: 
 def init_db() -> None:
     with get_conn() as conn:
         conn.executescript(SCHEMA)
-_add_missing(conn, "sim_runtime", "emergency_hold", "emergency_hold INTEGER NOT NULL DEFAULT 0")
+        _add_missing(conn, "sim_runtime", "emergency_hold", "emergency_hold INTEGER NOT NULL DEFAULT 0")
         _add_missing(conn, "tasks", "scene_id", "scene_id TEXT NOT NULL DEFAULT 'sim_default'")
         _add_missing(conn, "road_events", "scene_id", "scene_id TEXT NOT NULL DEFAULT 'sim_default'")
         _add_missing(conn, "road_events", "edge_fraction", "edge_fraction REAL")

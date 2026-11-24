@@ -1,0 +1,2891 @@
+{
+  "map_id": "bupt-xitucheng-grid",
+  "map_version": "4.0.0",
+  "data_notice": "底图与建筑位置来自团队标注的《北京邮电大学西土城路校区示意图》。路网按示意图中的纵横向道路网格建模，站点以短入口线接入；坐标为图像像素，距离按约 0.28 米/像素估算。",
+  "coordinate_system": {
+    "width": 2491,
+    "height": 3509,
+    "origin": "top-left",
+    "x_axis": "right",
+    "y_axis": "down",
+    "unit": "image_px",
+    "meters_per_px": 0.28
+  },
+  "background_image": "/vendor/campus-base.jpg",
+  "nodes": [
+    {
+      "id": "g00",
+      "name": "",
+      "kind": "waypoint",
+      "x": 299,
+      "y": 434
+    },
+    {
+      "id": "g01",
+      "name": "",
+      "kind": "waypoint",
+      "x": 299,
+      "y": 645
+    },
+    {
+      "id": "g02",
+      "name": "",
+      "kind": "waypoint",
+      "x": 299,
+      "y": 878
+    },
+    {
+      "id": "g03",
+      "name": "",
+      "kind": "waypoint",
+      "x": 299,
+      "y": 1126
+    },
+    {
+      "id": "g04",
+      "name": "",
+      "kind": "waypoint",
+      "x": 299,
+      "y": 1494
+    },
+    {
+      "id": "g05",
+      "name": "",
+      "kind": "waypoint",
+      "x": 299,
+      "y": 1861
+    },
+    {
+      "id": "g06",
+      "name": "",
+      "kind": "waypoint",
+      "x": 299,
+      "y": 2228
+    },
+    {
+      "id": "g07",
+      "name": "",
+      "kind": "waypoint",
+      "x": 299,
+      "y": 2565
+    },
+    {
+      "id": "g08",
+      "name": "",
+      "kind": "waypoint",
+      "x": 299,
+      "y": 2714
+    },
+    {
+      "id": "g09",
+      "name": "",
+      "kind": "waypoint",
+      "x": 299,
+      "y": 3249
+    },
+    {
+      "id": "g10",
+      "name": "",
+      "kind": "waypoint",
+      "x": 483,
+      "y": 434
+    },
+    {
+      "id": "g11",
+      "name": "",
+      "kind": "waypoint",
+      "x": 483,
+      "y": 645
+    },
+    {
+      "id": "g12",
+      "name": "",
+      "kind": "waypoint",
+      "x": 483,
+      "y": 878
+    },
+    {
+      "id": "g13",
+      "name": "",
+      "kind": "waypoint",
+      "x": 483,
+      "y": 1126
+    },
+    {
+      "id": "g14",
+      "name": "",
+      "kind": "waypoint",
+      "x": 483,
+      "y": 1494
+    },
+    {
+      "id": "g15",
+      "name": "",
+      "kind": "waypoint",
+      "x": 483,
+      "y": 1861
+    },
+    {
+      "id": "g16",
+      "name": "",
+      "kind": "waypoint",
+      "x": 483,
+      "y": 2228
+    },
+    {
+      "id": "g17",
+      "name": "",
+      "kind": "waypoint",
+      "x": 483,
+      "y": 2565
+    },
+    {
+      "id": "g18",
+      "name": "",
+      "kind": "waypoint",
+      "x": 483,
+      "y": 2714
+    },
+    {
+      "id": "g19",
+      "name": "",
+      "kind": "waypoint",
+      "x": 483,
+      "y": 3249
+    },
+    {
+      "id": "g20",
+      "name": "",
+      "kind": "waypoint",
+      "x": 759,
+      "y": 434
+    },
+    {
+      "id": "g21",
+      "name": "",
+      "kind": "waypoint",
+      "x": 759,
+      "y": 645
+    },
+    {
+      "id": "g22",
+      "name": "",
+      "kind": "waypoint",
+      "x": 759,
+      "y": 878
+    },
+    {
+      "id": "g23",
+      "name": "",
+      "kind": "waypoint",
+      "x": 759,
+      "y": 1126
+    },
+    {
+      "id": "g24",
+      "name": "",
+      "kind": "waypoint",
+      "x": 759,
+      "y": 1494
+    },
+    {
+      "id": "g25",
+      "name": "",
+      "kind": "waypoint",
+      "x": 759,
+      "y": 1861
+    },
+    {
+      "id": "g26",
+      "name": "",
+      "kind": "waypoint",
+      "x": 759,
+      "y": 2228
+    },
+    {
+      "id": "g27",
+      "name": "",
+      "kind": "waypoint",
+      "x": 759,
+      "y": 2565
+    },
+    {
+      "id": "g28",
+      "name": "",
+      "kind": "waypoint",
+      "x": 759,
+      "y": 2714
+    },
+    {
+      "id": "g29",
+      "name": "",
+      "kind": "waypoint",
+      "x": 759,
+      "y": 3249
+    },
+    {
+      "id": "g30",
+      "name": "北门",
+      "kind": "junction",
+      "x": 1094,
+      "y": 434
+    },
+    {
+      "id": "g31",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1094,
+      "y": 645
+    },
+    {
+      "id": "g32",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1094,
+      "y": 878
+    },
+    {
+      "id": "g33",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1094,
+      "y": 1126
+    },
+    {
+      "id": "g34",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1094,
+      "y": 1494
+    },
+    {
+      "id": "g35",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1094,
+      "y": 1861
+    },
+    {
+      "id": "g36",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1094,
+      "y": 2228
+    },
+    {
+      "id": "g37",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1094,
+      "y": 2565
+    },
+    {
+      "id": "g38",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1094,
+      "y": 2714
+    },
+    {
+      "id": "g39",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1094,
+      "y": 3249
+    },
+    {
+      "id": "g40",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1673,
+      "y": 434
+    },
+    {
+      "id": "g41",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1673,
+      "y": 645
+    },
+    {
+      "id": "g42",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1673,
+      "y": 878
+    },
+    {
+      "id": "g43",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1673,
+      "y": 1126
+    },
+    {
+      "id": "g44",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1673,
+      "y": 1494
+    },
+    {
+      "id": "g45",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1673,
+      "y": 1861
+    },
+    {
+      "id": "g46",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1673,
+      "y": 2228
+    },
+    {
+      "id": "g47",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1673,
+      "y": 2565
+    },
+    {
+      "id": "g48",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1673,
+      "y": 2714
+    },
+    {
+      "id": "g49",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1673,
+      "y": 3249
+    },
+    {
+      "id": "g50",
+      "name": "",
+      "kind": "waypoint",
+      "x": 2273,
+      "y": 434
+    },
+    {
+      "id": "g51",
+      "name": "",
+      "kind": "waypoint",
+      "x": 2273,
+      "y": 645
+    },
+    {
+      "id": "g52",
+      "name": "",
+      "kind": "waypoint",
+      "x": 2273,
+      "y": 878
+    },
+    {
+      "id": "g53",
+      "name": "",
+      "kind": "waypoint",
+      "x": 2273,
+      "y": 1126
+    },
+    {
+      "id": "g54",
+      "name": "",
+      "kind": "waypoint",
+      "x": 2273,
+      "y": 1494
+    },
+    {
+      "id": "g55",
+      "name": "",
+      "kind": "waypoint",
+      "x": 2273,
+      "y": 1861
+    },
+    {
+      "id": "g56",
+      "name": "",
+      "kind": "waypoint",
+      "x": 2273,
+      "y": 2228
+    },
+    {
+      "id": "g57",
+      "name": "",
+      "kind": "waypoint",
+      "x": 2273,
+      "y": 2565
+    },
+    {
+      "id": "g58",
+      "name": "",
+      "kind": "waypoint",
+      "x": 2273,
+      "y": 2714
+    },
+    {
+      "id": "g59",
+      "name": "",
+      "kind": "waypoint",
+      "x": 2273,
+      "y": 3249
+    },
+    {
+      "id": "a_cs_building",
+      "name": "",
+      "kind": "waypoint",
+      "x": 759,
+      "y": 2377.6
+    },
+    {
+      "id": "cs_building",
+      "name": "教三楼",
+      "aliases": [
+        "教三楼",
+        "计算机学院",
+        "计院",
+        "计算机楼"
+      ],
+      "kind": "location",
+      "x": 804.6,
+      "y": 2377.6
+    },
+    {
+      "id": "a_research_building",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1802.0,
+      "y": 878
+    },
+    {
+      "id": "research_building",
+      "name": "科研楼",
+      "aliases": [
+        "科研楼",
+        "科研大楼"
+      ],
+      "kind": "location",
+      "x": 1802.0,
+      "y": 781.4
+    },
+    {
+      "id": "a_lab_building",
+      "name": "",
+      "kind": "waypoint",
+      "x": 759,
+      "y": 1684.6
+    },
+    {
+      "id": "lab_building",
+      "name": "教四楼",
+      "aliases": [
+        "教四楼",
+        "实验室",
+        "实验楼",
+        "教四"
+      ],
+      "kind": "location",
+      "x": 733.8,
+      "y": 1684.6
+    },
+    {
+      "id": "a_xueyi_building",
+      "name": "",
+      "kind": "waypoint",
+      "x": 636.0,
+      "y": 1494
+    },
+    {
+      "id": "xueyi_building",
+      "name": "学一公寓",
+      "aliases": [
+        "学一公寓",
+        "学一楼",
+        "学1楼",
+        "学一",
+        "学生一舍"
+      ],
+      "kind": "location",
+      "x": 636.0,
+      "y": 1413.4
+    },
+    {
+      "id": "a_library",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1673,
+      "y": 1287.4
+    },
+    {
+      "id": "library",
+      "name": "图书馆",
+      "aliases": [
+        "图书馆",
+        "图书楼"
+      ],
+      "kind": "location",
+      "x": 1524.4,
+      "y": 1287.4
+    },
+    {
+      "id": "a_logistics_center",
+      "name": "",
+      "kind": "waypoint",
+      "x": 1469.4,
+      "y": 645
+    },
+    {
+      "id": "logistics_center",
+      "name": "综合服务楼",
+      "aliases": [
+        "后勤服务中心",
+        "综合服务楼",
+        "后勤",
+        "服务中心",
+        "物美"
+      ],
+      "kind": "location",
+      "x": 1469.4,
+      "y": 759.1
+    },
+    {
+      "id": "a_j_ne",
+      "name": "东北门",
+      "kind": "junction",
+      "x": 2257.4,
+      "y": 645
+    },
+    {
+      "id": "a_j_east",
+      "name": "东门",
+      "kind": "junction",
+      "x": 2257.4,
+      "y": 1494
+    },
+    {
+      "id": "a_j_west",
+      "name": "西门",
+      "kind": "junction",
+      "x": 299,
+      "y": 2059.0
+    },
+    {
+      "id": "a_j_middle",
+      "name": "中门",
+      "kind": "junction",
+      "x": 1073.6,
+      "y": 2714
+    },
+    {
+      "id": "a_j_south",
+      "name": "南门",
+      "kind": "junction",
+      "x": 1355.8,
+      "y": 3249
+    }
+  ],
+  "edges": [
+    {
+      "id": "e0001",
+      "name": "校园纵向道路",
+      "from": "g00",
+      "to": "g01",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          434
+        ],
+        [
+          299,
+          645
+        ]
+      ],
+      "distance_m": 59,
+      "base_status": "open"
+    },
+    {
+      "id": "e0002",
+      "name": "校园纵向道路",
+      "from": "g01",
+      "to": "g02",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          645
+        ],
+        [
+          299,
+          878
+        ]
+      ],
+      "distance_m": 65,
+      "base_status": "open"
+    },
+    {
+      "id": "e0003",
+      "name": "校园纵向道路",
+      "from": "g02",
+      "to": "g03",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          878
+        ],
+        [
+          299,
+          1126
+        ]
+      ],
+      "distance_m": 69,
+      "base_status": "open"
+    },
+    {
+      "id": "e0004",
+      "name": "校园纵向道路",
+      "from": "g03",
+      "to": "g04",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          1126
+        ],
+        [
+          299,
+          1494
+        ]
+      ],
+      "distance_m": 103,
+      "base_status": "open"
+    },
+    {
+      "id": "e0005",
+      "name": "校园纵向道路",
+      "from": "g04",
+      "to": "g05",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          1494
+        ],
+        [
+          299,
+          1861
+        ]
+      ],
+      "distance_m": 103,
+      "base_status": "open"
+    },
+    {
+      "id": "e0006",
+      "name": "校园纵向道路",
+      "from": "g05",
+      "to": "a_j_west",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          1861
+        ],
+        [
+          299,
+          2059.0
+        ]
+      ],
+      "distance_m": 55,
+      "base_status": "open"
+    },
+    {
+      "id": "e0007",
+      "name": "校园纵向道路",
+      "from": "a_j_west",
+      "to": "g06",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          2059.0
+        ],
+        [
+          299,
+          2228
+        ]
+      ],
+      "distance_m": 47,
+      "base_status": "open"
+    },
+    {
+      "id": "e0008",
+      "name": "校园纵向道路",
+      "from": "g06",
+      "to": "g07",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          2228
+        ],
+        [
+          299,
+          2565
+        ]
+      ],
+      "distance_m": 94,
+      "base_status": "open"
+    },
+    {
+      "id": "e0009",
+      "name": "校园纵向道路",
+      "from": "g07",
+      "to": "g08",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          2565
+        ],
+        [
+          299,
+          2714
+        ]
+      ],
+      "distance_m": 42,
+      "base_status": "open"
+    },
+    {
+      "id": "e0010",
+      "name": "校园纵向道路",
+      "from": "g08",
+      "to": "g09",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          2714
+        ],
+        [
+          299,
+          3249
+        ]
+      ],
+      "distance_m": 150,
+      "base_status": "open"
+    },
+    {
+      "id": "e0011",
+      "name": "校园纵向道路",
+      "from": "g10",
+      "to": "g11",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          434
+        ],
+        [
+          483,
+          645
+        ]
+      ],
+      "distance_m": 59,
+      "base_status": "open"
+    },
+    {
+      "id": "e0012",
+      "name": "校园纵向道路",
+      "from": "g11",
+      "to": "g12",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          645
+        ],
+        [
+          483,
+          878
+        ]
+      ],
+      "distance_m": 65,
+      "base_status": "open"
+    },
+    {
+      "id": "e0013",
+      "name": "校园纵向道路",
+      "from": "g12",
+      "to": "g13",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          878
+        ],
+        [
+          483,
+          1126
+        ]
+      ],
+      "distance_m": 69,
+      "base_status": "open"
+    },
+    {
+      "id": "e0014",
+      "name": "校园纵向道路",
+      "from": "g13",
+      "to": "g14",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          1126
+        ],
+        [
+          483,
+          1494
+        ]
+      ],
+      "distance_m": 103,
+      "base_status": "open"
+    },
+    {
+      "id": "e0015",
+      "name": "校园纵向道路",
+      "from": "g14",
+      "to": "g15",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          1494
+        ],
+        [
+          483,
+          1861
+        ]
+      ],
+      "distance_m": 103,
+      "base_status": "open"
+    },
+    {
+      "id": "e0016",
+      "name": "校园纵向道路",
+      "from": "g15",
+      "to": "g16",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          1861
+        ],
+        [
+          483,
+          2228
+        ]
+      ],
+      "distance_m": 103,
+      "base_status": "open"
+    },
+    {
+      "id": "e0017",
+      "name": "校园纵向道路",
+      "from": "g16",
+      "to": "g17",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          2228
+        ],
+        [
+          483,
+          2565
+        ]
+      ],
+      "distance_m": 94,
+      "base_status": "open"
+    },
+    {
+      "id": "e0018",
+      "name": "校园纵向道路",
+      "from": "g17",
+      "to": "g18",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          2565
+        ],
+        [
+          483,
+          2714
+        ]
+      ],
+      "distance_m": 42,
+      "base_status": "open"
+    },
+    {
+      "id": "e0019",
+      "name": "校园纵向道路",
+      "from": "g18",
+      "to": "g19",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          2714
+        ],
+        [
+          483,
+          3249
+        ]
+      ],
+      "distance_m": 150,
+      "base_status": "open"
+    },
+    {
+      "id": "e0020",
+      "name": "校园纵向道路",
+      "from": "g20",
+      "to": "g21",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          434
+        ],
+        [
+          759,
+          645
+        ]
+      ],
+      "distance_m": 59,
+      "base_status": "open"
+    },
+    {
+      "id": "e0021",
+      "name": "校园纵向道路",
+      "from": "g21",
+      "to": "g22",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          645
+        ],
+        [
+          759,
+          878
+        ]
+      ],
+      "distance_m": 65,
+      "base_status": "open"
+    },
+    {
+      "id": "e0022",
+      "name": "校园纵向道路",
+      "from": "g22",
+      "to": "g23",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          878
+        ],
+        [
+          759,
+          1126
+        ]
+      ],
+      "distance_m": 69,
+      "base_status": "open"
+    },
+    {
+      "id": "e0023",
+      "name": "校园纵向道路",
+      "from": "g23",
+      "to": "g24",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          1126
+        ],
+        [
+          759,
+          1494
+        ]
+      ],
+      "distance_m": 103,
+      "base_status": "open"
+    },
+    {
+      "id": "e0024",
+      "name": "校园纵向道路",
+      "from": "g24",
+      "to": "a_lab_building",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          1494
+        ],
+        [
+          759,
+          1684.6
+        ]
+      ],
+      "distance_m": 53,
+      "base_status": "open"
+    },
+    {
+      "id": "e0025",
+      "name": "校园纵向道路",
+      "from": "a_lab_building",
+      "to": "g25",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          1684.6
+        ],
+        [
+          759,
+          1861
+        ]
+      ],
+      "distance_m": 49,
+      "base_status": "open"
+    },
+    {
+      "id": "e0026",
+      "name": "校园纵向道路",
+      "from": "g25",
+      "to": "g26",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          1861
+        ],
+        [
+          759,
+          2228
+        ]
+      ],
+      "distance_m": 103,
+      "base_status": "open"
+    },
+    {
+      "id": "e0027",
+      "name": "校园纵向道路",
+      "from": "g26",
+      "to": "a_cs_building",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          2228
+        ],
+        [
+          759,
+          2377.6
+        ]
+      ],
+      "distance_m": 42,
+      "base_status": "open"
+    },
+    {
+      "id": "e0028",
+      "name": "校园纵向道路",
+      "from": "a_cs_building",
+      "to": "g27",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          2377.6
+        ],
+        [
+          759,
+          2565
+        ]
+      ],
+      "distance_m": 52,
+      "base_status": "open"
+    },
+    {
+      "id": "e0029",
+      "name": "校园纵向道路",
+      "from": "g27",
+      "to": "g28",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          2565
+        ],
+        [
+          759,
+          2714
+        ]
+      ],
+      "distance_m": 42,
+      "base_status": "open"
+    },
+    {
+      "id": "e0030",
+      "name": "校园纵向道路",
+      "from": "g28",
+      "to": "g29",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          2714
+        ],
+        [
+          759,
+          3249
+        ]
+      ],
+      "distance_m": 150,
+      "base_status": "open"
+    },
+    {
+      "id": "e0031",
+      "name": "校园纵向道路",
+      "from": "g30",
+      "to": "g31",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          434
+        ],
+        [
+          1094,
+          645
+        ]
+      ],
+      "distance_m": 59,
+      "base_status": "open"
+    },
+    {
+      "id": "e0032",
+      "name": "校园纵向道路",
+      "from": "g31",
+      "to": "g32",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          645
+        ],
+        [
+          1094,
+          878
+        ]
+      ],
+      "distance_m": 65,
+      "base_status": "open"
+    },
+    {
+      "id": "e0033",
+      "name": "校园纵向道路",
+      "from": "g32",
+      "to": "g33",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          878
+        ],
+        [
+          1094,
+          1126
+        ]
+      ],
+      "distance_m": 69,
+      "base_status": "open"
+    },
+    {
+      "id": "e0034",
+      "name": "校园纵向道路",
+      "from": "g33",
+      "to": "g34",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          1126
+        ],
+        [
+          1094,
+          1494
+        ]
+      ],
+      "distance_m": 103,
+      "base_status": "open"
+    },
+    {
+      "id": "e0035",
+      "name": "校园纵向道路",
+      "from": "g34",
+      "to": "g35",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          1494
+        ],
+        [
+          1094,
+          1861
+        ]
+      ],
+      "distance_m": 103,
+      "base_status": "open"
+    },
+    {
+      "id": "e0036",
+      "name": "校园纵向道路",
+      "from": "g35",
+      "to": "g36",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          1861
+        ],
+        [
+          1094,
+          2228
+        ]
+      ],
+      "distance_m": 103,
+      "base_status": "open"
+    },
+    {
+      "id": "e0037",
+      "name": "校园纵向道路",
+      "from": "g36",
+      "to": "g37",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          2228
+        ],
+        [
+          1094,
+          2565
+        ]
+      ],
+      "distance_m": 94,
+      "base_status": "open"
+    },
+    {
+      "id": "e0038",
+      "name": "校园纵向道路",
+      "from": "g37",
+      "to": "g38",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          2565
+        ],
+        [
+          1094,
+          2714
+        ]
+      ],
+      "distance_m": 42,
+      "base_status": "open"
+    },
+    {
+      "id": "e0039",
+      "name": "校园纵向道路",
+      "from": "g38",
+      "to": "g39",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          2714
+        ],
+        [
+          1094,
+          3249
+        ]
+      ],
+      "distance_m": 150,
+      "base_status": "open"
+    },
+    {
+      "id": "e0040",
+      "name": "校园纵向道路",
+      "from": "g40",
+      "to": "g41",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          434
+        ],
+        [
+          1673,
+          645
+        ]
+      ],
+      "distance_m": 59,
+      "base_status": "open"
+    },
+    {
+      "id": "e0041",
+      "name": "校园纵向道路",
+      "from": "g41",
+      "to": "g42",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          645
+        ],
+        [
+          1673,
+          878
+        ]
+      ],
+      "distance_m": 65,
+      "base_status": "open"
+    },
+    {
+      "id": "e0042",
+      "name": "校园纵向道路",
+      "from": "g42",
+      "to": "g43",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          878
+        ],
+        [
+          1673,
+          1126
+        ]
+      ],
+      "distance_m": 69,
+      "base_status": "open"
+    },
+    {
+      "id": "e0043",
+      "name": "校园纵向道路",
+      "from": "g43",
+      "to": "a_library",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          1126
+        ],
+        [
+          1673,
+          1287.4
+        ]
+      ],
+      "distance_m": 45,
+      "base_status": "open"
+    },
+    {
+      "id": "e0044",
+      "name": "校园纵向道路",
+      "from": "a_library",
+      "to": "g44",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          1287.4
+        ],
+        [
+          1673,
+          1494
+        ]
+      ],
+      "distance_m": 58,
+      "base_status": "open"
+    },
+    {
+      "id": "e0045",
+      "name": "校园纵向道路",
+      "from": "g44",
+      "to": "g45",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          1494
+        ],
+        [
+          1673,
+          1861
+        ]
+      ],
+      "distance_m": 103,
+      "base_status": "open"
+    },
+    {
+      "id": "e0046",
+      "name": "校园纵向道路",
+      "from": "g45",
+      "to": "g46",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          1861
+        ],
+        [
+          1673,
+          2228
+        ]
+      ],
+      "distance_m": 103,
+      "base_status": "open"
+    },
+    {
+      "id": "e0047",
+      "name": "校园纵向道路",
+      "from": "g46",
+      "to": "g47",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          2228
+        ],
+        [
+          1673,
+          2565
+        ]
+      ],
+      "distance_m": 94,
+      "base_status": "open"
+    },
+    {
+      "id": "e0048",
+      "name": "校园纵向道路",
+      "from": "g47",
+      "to": "g48",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          2565
+        ],
+        [
+          1673,
+          2714
+        ]
+      ],
+      "distance_m": 42,
+      "base_status": "open"
+    },
+    {
+      "id": "e0049",
+      "name": "校园纵向道路",
+      "from": "g48",
+      "to": "g49",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          2714
+        ],
+        [
+          1673,
+          3249
+        ]
+      ],
+      "distance_m": 150,
+      "base_status": "open"
+    },
+    {
+      "id": "e0050",
+      "name": "校园纵向道路",
+      "from": "g50",
+      "to": "g51",
+      "bidirectional": true,
+      "polyline": [
+        [
+          2273,
+          434
+        ],
+        [
+          2273,
+          645
+        ]
+      ],
+      "distance_m": 59,
+      "base_status": "open"
+    },
+    {
+      "id": "e0051",
+      "name": "校园纵向道路",
+      "from": "g51",
+      "to": "g52",
+      "bidirectional": true,
+      "polyline": [
+        [
+          2273,
+          645
+        ],
+        [
+          2273,
+          878
+        ]
+      ],
+      "distance_m": 65,
+      "base_status": "open"
+    },
+    {
+      "id": "e0052",
+      "name": "校园纵向道路",
+      "from": "g52",
+      "to": "g53",
+      "bidirectional": true,
+      "polyline": [
+        [
+          2273,
+          878
+        ],
+        [
+          2273,
+          1126
+        ]
+      ],
+      "distance_m": 69,
+      "base_status": "open"
+    },
+    {
+      "id": "e0053",
+      "name": "校园纵向道路",
+      "from": "g53",
+      "to": "g54",
+      "bidirectional": true,
+      "polyline": [
+        [
+          2273,
+          1126
+        ],
+        [
+          2273,
+          1494
+        ]
+      ],
+      "distance_m": 103,
+      "base_status": "open"
+    },
+    {
+      "id": "e0054",
+      "name": "校园纵向道路",
+      "from": "g54",
+      "to": "g55",
+      "bidirectional": true,
+      "polyline": [
+        [
+          2273,
+          1494
+        ],
+        [
+          2273,
+          1861
+        ]
+      ],
+      "distance_m": 103,
+      "base_status": "open"
+    },
+    {
+      "id": "e0055",
+      "name": "校园纵向道路",
+      "from": "g55",
+      "to": "g56",
+      "bidirectional": true,
+      "polyline": [
+        [
+          2273,
+          1861
+        ],
+        [
+          2273,
+          2228
+        ]
+      ],
+      "distance_m": 103,
+      "base_status": "open"
+    },
+    {
+      "id": "e0056",
+      "name": "校园纵向道路",
+      "from": "g56",
+      "to": "g57",
+      "bidirectional": true,
+      "polyline": [
+        [
+          2273,
+          2228
+        ],
+        [
+          2273,
+          2565
+        ]
+      ],
+      "distance_m": 94,
+      "base_status": "open"
+    },
+    {
+      "id": "e0057",
+      "name": "校园纵向道路",
+      "from": "g57",
+      "to": "g58",
+      "bidirectional": true,
+      "polyline": [
+        [
+          2273,
+          2565
+        ],
+        [
+          2273,
+          2714
+        ]
+      ],
+      "distance_m": 42,
+      "base_status": "open"
+    },
+    {
+      "id": "e0058",
+      "name": "校园纵向道路",
+      "from": "g58",
+      "to": "g59",
+      "bidirectional": true,
+      "polyline": [
+        [
+          2273,
+          2714
+        ],
+        [
+          2273,
+          3249
+        ]
+      ],
+      "distance_m": 150,
+      "base_status": "open"
+    },
+    {
+      "id": "e0059",
+      "name": "校园横向道路",
+      "from": "g00",
+      "to": "g10",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          434
+        ],
+        [
+          483,
+          434
+        ]
+      ],
+      "distance_m": 52,
+      "base_status": "open"
+    },
+    {
+      "id": "e0060",
+      "name": "校园横向道路",
+      "from": "g10",
+      "to": "g20",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          434
+        ],
+        [
+          759,
+          434
+        ]
+      ],
+      "distance_m": 77,
+      "base_status": "open"
+    },
+    {
+      "id": "e0061",
+      "name": "校园横向道路",
+      "from": "g20",
+      "to": "g30",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          434
+        ],
+        [
+          1094,
+          434
+        ]
+      ],
+      "distance_m": 94,
+      "base_status": "open"
+    },
+    {
+      "id": "e0062",
+      "name": "校园横向道路",
+      "from": "g30",
+      "to": "g40",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          434
+        ],
+        [
+          1673,
+          434
+        ]
+      ],
+      "distance_m": 162,
+      "base_status": "open"
+    },
+    {
+      "id": "e0063",
+      "name": "校园横向道路",
+      "from": "g40",
+      "to": "g50",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          434
+        ],
+        [
+          2273,
+          434
+        ]
+      ],
+      "distance_m": 168,
+      "base_status": "open"
+    },
+    {
+      "id": "e0064",
+      "name": "校园横向道路",
+      "from": "g01",
+      "to": "g11",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          645
+        ],
+        [
+          483,
+          645
+        ]
+      ],
+      "distance_m": 52,
+      "base_status": "open"
+    },
+    {
+      "id": "e0065",
+      "name": "校园横向道路",
+      "from": "g11",
+      "to": "g21",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          645
+        ],
+        [
+          759,
+          645
+        ]
+      ],
+      "distance_m": 77,
+      "base_status": "open"
+    },
+    {
+      "id": "e0066",
+      "name": "校园横向道路",
+      "from": "g21",
+      "to": "g31",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          645
+        ],
+        [
+          1094,
+          645
+        ]
+      ],
+      "distance_m": 94,
+      "base_status": "open"
+    },
+    {
+      "id": "e0067",
+      "name": "校园横向道路",
+      "from": "g31",
+      "to": "a_logistics_center",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          645
+        ],
+        [
+          1469.4,
+          645
+        ]
+      ],
+      "distance_m": 105,
+      "base_status": "open"
+    },
+    {
+      "id": "e0068",
+      "name": "校园横向道路",
+      "from": "a_logistics_center",
+      "to": "g41",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1469.4,
+          645
+        ],
+        [
+          1673,
+          645
+        ]
+      ],
+      "distance_m": 57,
+      "base_status": "open"
+    },
+    {
+      "id": "e0069",
+      "name": "校园横向道路",
+      "from": "g41",
+      "to": "a_j_ne",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          645
+        ],
+        [
+          2257.4,
+          645
+        ]
+      ],
+      "distance_m": 164,
+      "base_status": "open"
+    },
+    {
+      "id": "e0070",
+      "name": "校园横向道路",
+      "from": "a_j_ne",
+      "to": "g51",
+      "bidirectional": true,
+      "polyline": [
+        [
+          2257.4,
+          645
+        ],
+        [
+          2273,
+          645
+        ]
+      ],
+      "distance_m": 4,
+      "base_status": "open"
+    },
+    {
+      "id": "e0071",
+      "name": "校园横向道路",
+      "from": "g02",
+      "to": "g12",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          878
+        ],
+        [
+          483,
+          878
+        ]
+      ],
+      "distance_m": 52,
+      "base_status": "open"
+    },
+    {
+      "id": "e0072",
+      "name": "校园横向道路",
+      "from": "g12",
+      "to": "g22",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          878
+        ],
+        [
+          759,
+          878
+        ]
+      ],
+      "distance_m": 77,
+      "base_status": "open"
+    },
+    {
+      "id": "e0073",
+      "name": "校园横向道路",
+      "from": "g22",
+      "to": "g32",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          878
+        ],
+        [
+          1094,
+          878
+        ]
+      ],
+      "distance_m": 94,
+      "base_status": "open"
+    },
+    {
+      "id": "e0074",
+      "name": "校园横向道路",
+      "from": "g32",
+      "to": "g42",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          878
+        ],
+        [
+          1673,
+          878
+        ]
+      ],
+      "distance_m": 162,
+      "base_status": "open"
+    },
+    {
+      "id": "e0075",
+      "name": "校园横向道路",
+      "from": "g42",
+      "to": "a_research_building",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          878
+        ],
+        [
+          1802.0,
+          878
+        ]
+      ],
+      "distance_m": 36,
+      "base_status": "open"
+    },
+    {
+      "id": "e0076",
+      "name": "校园横向道路",
+      "from": "a_research_building",
+      "to": "g52",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1802.0,
+          878
+        ],
+        [
+          2273,
+          878
+        ]
+      ],
+      "distance_m": 132,
+      "base_status": "open"
+    },
+    {
+      "id": "e0077",
+      "name": "校园横向道路",
+      "from": "g03",
+      "to": "g13",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          1126
+        ],
+        [
+          483,
+          1126
+        ]
+      ],
+      "distance_m": 52,
+      "base_status": "open"
+    },
+    {
+      "id": "e0078",
+      "name": "校园横向道路",
+      "from": "g13",
+      "to": "g23",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          1126
+        ],
+        [
+          759,
+          1126
+        ]
+      ],
+      "distance_m": 77,
+      "base_status": "open"
+    },
+    {
+      "id": "e0079",
+      "name": "校园横向道路",
+      "from": "g23",
+      "to": "g33",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          1126
+        ],
+        [
+          1094,
+          1126
+        ]
+      ],
+      "distance_m": 94,
+      "base_status": "open"
+    },
+    {
+      "id": "e0080",
+      "name": "校园横向道路",
+      "from": "g33",
+      "to": "g43",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          1126
+        ],
+        [
+          1673,
+          1126
+        ]
+      ],
+      "distance_m": 162,
+      "base_status": "open"
+    },
+    {
+      "id": "e0081",
+      "name": "校园横向道路",
+      "from": "g43",
+      "to": "g53",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          1126
+        ],
+        [
+          2273,
+          1126
+        ]
+      ],
+      "distance_m": 168,
+      "base_status": "open"
+    },
+    {
+      "id": "e0082",
+      "name": "校园横向道路",
+      "from": "g04",
+      "to": "g14",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          1494
+        ],
+        [
+          483,
+          1494
+        ]
+      ],
+      "distance_m": 52,
+      "base_status": "open"
+    },
+    {
+      "id": "e0083",
+      "name": "校园横向道路",
+      "from": "g14",
+      "to": "a_xueyi_building",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          1494
+        ],
+        [
+          636.0,
+          1494
+        ]
+      ],
+      "distance_m": 43,
+      "base_status": "open"
+    },
+    {
+      "id": "e0084",
+      "name": "校园横向道路",
+      "from": "a_xueyi_building",
+      "to": "g24",
+      "bidirectional": true,
+      "polyline": [
+        [
+          636.0,
+          1494
+        ],
+        [
+          759,
+          1494
+        ]
+      ],
+      "distance_m": 34,
+      "base_status": "open"
+    },
+    {
+      "id": "e0085",
+      "name": "校园横向道路",
+      "from": "g24",
+      "to": "g34",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          1494
+        ],
+        [
+          1094,
+          1494
+        ]
+      ],
+      "distance_m": 94,
+      "base_status": "open"
+    },
+    {
+      "id": "e0086",
+      "name": "校园横向道路",
+      "from": "g34",
+      "to": "g44",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          1494
+        ],
+        [
+          1673,
+          1494
+        ]
+      ],
+      "distance_m": 162,
+      "base_status": "open"
+    },
+    {
+      "id": "e0087",
+      "name": "校园横向道路",
+      "from": "g44",
+      "to": "a_j_east",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          1494
+        ],
+        [
+          2257.4,
+          1494
+        ]
+      ],
+      "distance_m": 164,
+      "base_status": "open"
+    },
+    {
+      "id": "e0088",
+      "name": "校园横向道路",
+      "from": "a_j_east",
+      "to": "g54",
+      "bidirectional": true,
+      "polyline": [
+        [
+          2257.4,
+          1494
+        ],
+        [
+          2273,
+          1494
+        ]
+      ],
+      "distance_m": 4,
+      "base_status": "open"
+    },
+    {
+      "id": "e0089",
+      "name": "校园横向道路",
+      "from": "g05",
+      "to": "g15",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          1861
+        ],
+        [
+          483,
+          1861
+        ]
+      ],
+      "distance_m": 52,
+      "base_status": "open"
+    },
+    {
+      "id": "e0090",
+      "name": "校园横向道路",
+      "from": "g15",
+      "to": "g25",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          1861
+        ],
+        [
+          759,
+          1861
+        ]
+      ],
+      "distance_m": 77,
+      "base_status": "open"
+    },
+    {
+      "id": "e0091",
+      "name": "校园横向道路",
+      "from": "g25",
+      "to": "g35",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          1861
+        ],
+        [
+          1094,
+          1861
+        ]
+      ],
+      "distance_m": 94,
+      "base_status": "open"
+    },
+    {
+      "id": "e0092",
+      "name": "校园横向道路",
+      "from": "g35",
+      "to": "g45",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          1861
+        ],
+        [
+          1673,
+          1861
+        ]
+      ],
+      "distance_m": 162,
+      "base_status": "open"
+    },
+    {
+      "id": "e0093",
+      "name": "校园横向道路",
+      "from": "g45",
+      "to": "g55",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          1861
+        ],
+        [
+          2273,
+          1861
+        ]
+      ],
+      "distance_m": 168,
+      "base_status": "open"
+    },
+    {
+      "id": "e0094",
+      "name": "校园横向道路",
+      "from": "g06",
+      "to": "g16",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          2228
+        ],
+        [
+          483,
+          2228
+        ]
+      ],
+      "distance_m": 52,
+      "base_status": "open"
+    },
+    {
+      "id": "e0095",
+      "name": "校园横向道路",
+      "from": "g16",
+      "to": "g26",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          2228
+        ],
+        [
+          759,
+          2228
+        ]
+      ],
+      "distance_m": 77,
+      "base_status": "open"
+    },
+    {
+      "id": "e0096",
+      "name": "校园横向道路",
+      "from": "g26",
+      "to": "g36",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          2228
+        ],
+        [
+          1094,
+          2228
+        ]
+      ],
+      "distance_m": 94,
+      "base_status": "open"
+    },
+    {
+      "id": "e0097",
+      "name": "校园横向道路",
+      "from": "g36",
+      "to": "g46",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          2228
+        ],
+        [
+          1673,
+          2228
+        ]
+      ],
+      "distance_m": 162,
+      "base_status": "open"
+    },
+    {
+      "id": "e0098",
+      "name": "校园横向道路",
+      "from": "g46",
+      "to": "g56",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          2228
+        ],
+        [
+          2273,
+          2228
+        ]
+      ],
+      "distance_m": 168,
+      "base_status": "open"
+    },
+    {
+      "id": "e0099",
+      "name": "校园横向道路",
+      "from": "g07",
+      "to": "g17",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          2565
+        ],
+        [
+          483,
+          2565
+        ]
+      ],
+      "distance_m": 52,
+      "base_status": "open"
+    },
+    {
+      "id": "e0100",
+      "name": "校园横向道路",
+      "from": "g17",
+      "to": "g27",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          2565
+        ],
+        [
+          759,
+          2565
+        ]
+      ],
+      "distance_m": 77,
+      "base_status": "open"
+    },
+    {
+      "id": "e0101",
+      "name": "校园横向道路",
+      "from": "g27",
+      "to": "g37",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          2565
+        ],
+        [
+          1094,
+          2565
+        ]
+      ],
+      "distance_m": 94,
+      "base_status": "open"
+    },
+    {
+      "id": "e0102",
+      "name": "校园横向道路",
+      "from": "g37",
+      "to": "g47",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          2565
+        ],
+        [
+          1673,
+          2565
+        ]
+      ],
+      "distance_m": 162,
+      "base_status": "open"
+    },
+    {
+      "id": "e0103",
+      "name": "校园横向道路",
+      "from": "g47",
+      "to": "g57",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          2565
+        ],
+        [
+          2273,
+          2565
+        ]
+      ],
+      "distance_m": 168,
+      "base_status": "open"
+    },
+    {
+      "id": "e0104",
+      "name": "校园横向道路",
+      "from": "g08",
+      "to": "g18",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          2714
+        ],
+        [
+          483,
+          2714
+        ]
+      ],
+      "distance_m": 52,
+      "base_status": "open"
+    },
+    {
+      "id": "e0105",
+      "name": "校园横向道路",
+      "from": "g18",
+      "to": "g28",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          2714
+        ],
+        [
+          759,
+          2714
+        ]
+      ],
+      "distance_m": 77,
+      "base_status": "open"
+    },
+    {
+      "id": "e0106",
+      "name": "校园横向道路",
+      "from": "g28",
+      "to": "a_j_middle",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          2714
+        ],
+        [
+          1073.6,
+          2714
+        ]
+      ],
+      "distance_m": 88,
+      "base_status": "open"
+    },
+    {
+      "id": "e0107",
+      "name": "校园横向道路",
+      "from": "a_j_middle",
+      "to": "g38",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1073.6,
+          2714
+        ],
+        [
+          1094,
+          2714
+        ]
+      ],
+      "distance_m": 6,
+      "base_status": "open"
+    },
+    {
+      "id": "e0108",
+      "name": "校园横向道路",
+      "from": "g38",
+      "to": "g48",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          2714
+        ],
+        [
+          1673,
+          2714
+        ]
+      ],
+      "distance_m": 162,
+      "base_status": "open"
+    },
+    {
+      "id": "e0109",
+      "name": "校园横向道路",
+      "from": "g48",
+      "to": "g58",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          2714
+        ],
+        [
+          2273,
+          2714
+        ]
+      ],
+      "distance_m": 168,
+      "base_status": "open"
+    },
+    {
+      "id": "e0110",
+      "name": "校园横向道路",
+      "from": "g09",
+      "to": "g19",
+      "bidirectional": true,
+      "polyline": [
+        [
+          299,
+          3249
+        ],
+        [
+          483,
+          3249
+        ]
+      ],
+      "distance_m": 52,
+      "base_status": "open"
+    },
+    {
+      "id": "e0111",
+      "name": "校园横向道路",
+      "from": "g19",
+      "to": "g29",
+      "bidirectional": true,
+      "polyline": [
+        [
+          483,
+          3249
+        ],
+        [
+          759,
+          3249
+        ]
+      ],
+      "distance_m": 77,
+      "base_status": "open"
+    },
+    {
+      "id": "e0112",
+      "name": "校园横向道路",
+      "from": "g29",
+      "to": "g39",
+      "bidirectional": true,
+      "polyline": [
+        [
+          759,
+          3249
+        ],
+        [
+          1094,
+          3249
+        ]
+      ],
+      "distance_m": 94,
+      "base_status": "open"
+    },
+    {
+      "id": "e0113",
+      "name": "校园横向道路",
+      "from": "g39",
+      "to": "a_j_south",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1094,
+          3249
+        ],
+        [
+          1355.8,
+          3249
+        ]
+      ],
+      "distance_m": 73,
+      "base_status": "open"
+    },
+    {
+      "id": "e0114",
+      "name": "校园横向道路",
+      "from": "a_j_south",
+      "to": "g49",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1355.8,
+          3249
+        ],
+        [
+          1673,
+          3249
+        ]
+      ],
+      "distance_m": 89,
+      "base_status": "open"
+    },
+    {
+      "id": "e0115",
+      "name": "校园横向道路",
+      "from": "g49",
+      "to": "g59",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1673,
+          3249
+        ],
+        [
+          2273,
+          3249
+        ]
+      ],
+      "distance_m": 168,
+      "base_status": "open"
+    },
+    {
+      "id": "e0116",
+      "name": "教三楼入口",
+      "from": "cs_building",
+      "to": "a_cs_building",
+      "bidirectional": true,
+      "polyline": [
+        [
+          804.6,
+          2377.6
+        ],
+        [
+          759,
+          2377.6
+        ]
+      ],
+      "distance_m": 13,
+      "base_status": "open"
+    },
+    {
+      "id": "e0117",
+      "name": "科研楼入口",
+      "from": "research_building",
+      "to": "a_research_building",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1802.0,
+          781.4
+        ],
+        [
+          1802.0,
+          878
+        ]
+      ],
+      "distance_m": 27,
+      "base_status": "open"
+    },
+    {
+      "id": "e0118",
+      "name": "教四楼入口",
+      "from": "lab_building",
+      "to": "a_lab_building",
+      "bidirectional": true,
+      "polyline": [
+        [
+          733.8,
+          1684.6
+        ],
+        [
+          759,
+          1684.6
+        ]
+      ],
+      "distance_m": 7,
+      "base_status": "open"
+    },
+    {
+      "id": "e0119",
+      "name": "学一公寓入口",
+      "from": "xueyi_building",
+      "to": "a_xueyi_building",
+      "bidirectional": true,
+      "polyline": [
+        [
+          636.0,
+          1413.4
+        ],
+        [
+          636.0,
+          1494
+        ]
+      ],
+      "distance_m": 23,
+      "base_status": "open"
+    },
+    {
+      "id": "e0120",
+      "name": "图书馆入口",
+      "from": "library",
+      "to": "a_library",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1524.4,
+          1287.4
+        ],
+        [
+          1673,
+          1287.4
+        ]
+      ],
+      "distance_m": 42,
+      "base_status": "open"
+    },
+    {
+      "id": "e0121",
+      "name": "综合服务楼入口",
+      "from": "logistics_center",
+      "to": "a_logistics_center",
+      "bidirectional": true,
+      "polyline": [
+        [
+          1469.4,
+          759.1
+        ],
+        [
+          1469.4,
+          645
+        ]
+      ],
+      "distance_m": 32,
+      "base_status": "open"
+    }
+  ]
+}

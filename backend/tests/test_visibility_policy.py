@@ -78,7 +78,7 @@ def test_visibility_does_not_extend_through_the_next_connection():
 
 
 def test_campus_e0026_can_be_rechecked_from_adjacent_road():
-    data = MapData(json.loads((Path(__file__).parents[1] / "data" / "campus_map.json").read_text(encoding="utf-8")))
+    data = MapData(json.loads((Path(__file__).parent / "fixtures" / "campus_map_v4.json").read_text(encoding="utf-8")))
     edge = data.edges["e0026"]
     junction = edge["from"]
     adjacent = next(e for e in data.edges.values() if e["id"] != "e0026" and junction in (e["from"], e["to"]))

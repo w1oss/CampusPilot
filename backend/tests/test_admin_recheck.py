@@ -117,7 +117,7 @@ def test_report_again_restarts_evidence_and_can_be_cleared_again(isolated_world)
 
 
 def test_e0074_whole_road_can_be_cleared_from_g42_without_entering_it(isolated_world, monkeypatch):
-    data = MapData(json.loads((Path(__file__).parents[1] / "data/campus_map.json").read_text(encoding="utf-8")))
+    data = MapData(json.loads((Path(__file__).parent / "fixtures" / "campus_map_v4.json").read_text(encoding="utf-8")))
     for module in (service, bridge, main, scene_sim):
         monkeypatch.setattr(module, "load_map", lambda: data)
     task_id = service.create_task({"mode": "sim", "pickup_location_id": "cs_building", "stops": [

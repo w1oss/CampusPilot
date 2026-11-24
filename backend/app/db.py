@@ -64,7 +64,9 @@ CREATE TABLE IF NOT EXISTS road_events (
     confirmed_by TEXT NOT NULL,
     note TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
-    expires_at TEXT
+    expires_at TEXT,
+    observe_count INTEGER NOT NULL DEFAULT 0,
+    last_observed_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS execution_state (
@@ -257,11 +259,13 @@ def _add_missing(conn: sqlite3.Connection, table: str, column: str, definition: 
 def init_db() -> None:
     with get_conn() as conn:
         conn.executescript(SCHEMA)
-        _add_missing(conn, "sim_runtime", "emergency_hold", "emergency_hold INTEGER NOT NULL DEFAULT 0")
+_add_missing(conn, "sim_runtime", "emergency_hold", "emergency_hold INTEGER NOT NULL DEFAULT 0")
         _add_missing(conn, "tasks", "scene_id", "scene_id TEXT NOT NULL DEFAULT 'sim_default'")
         _add_missing(conn, "road_events", "scene_id", "scene_id TEXT NOT NULL DEFAULT 'sim_default'")
         _add_missing(conn, "road_events", "edge_fraction", "edge_fraction REAL")
         _add_missing(conn, "road_events", "authority", "authority TEXT NOT NULL DEFAULT 'normal'")
+        _add_missing(conn, "road_events", "observe_count", "observe_count INTEGER NOT NULL DEFAULT 0")
+        _add_missing(conn, "road_events", "last_observed_at", "last_observed_at TEXT")
         _add_missing(conn, "road_known", "clear_evidence", "clear_evidence INTEGER NOT NULL DEFAULT 0")
         _add_missing(conn, "upstream_simulations", "last_edge_id", "last_edge_id TEXT")
         _add_missing(conn, "upstream_simulations", "next_generate_at", "next_generate_at REAL NOT NULL DEFAULT 0")
@@ -272,6 +276,7 @@ def init_db() -> None:
         conn.execute("INSERT OR IGNORE INTO scenes (id, kind, virtual_seconds, created_at, updated_at) VALUES (?, ?, 0, ?, ?)",
                      ("real_default", "real", stamp, stamp))
         conn.execute("UPDATE tasks SET scene_id = 'real_default' WHERE mode = 'real' AND scene_id = 'sim_default'")
+
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
